@@ -28,8 +28,19 @@ class PyAVWhisperASRProvider(ASRProvider):
     def _get_faster_model(self):
         if self._faster_model is None:
             try:
+                import glob
+                import os
                 from faster_whisper import WhisperModel
-                self._faster_model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+                # Check for cached local snapshot to enforce strict offline execution
+                hub_pattern = os.path.expanduser(f"~/.cache/huggingface/hub/models--Systran--faster-whisper-{self.model_size}/snapshots/*")
+                snapshots = glob.glob(hub_pattern)
+                model_ref = snapshots[0] if snapshots else self.model_size
+                self._faster_model = WhisperModel(
+                    model_ref,
+                    device="cpu",
+                    compute_type="int8",
+                    local_files_only=bool(snapshots)
+                )
             except Exception as e:
                 print(f"[ASR] faster-whisper initialization note: {e}")
                 self._faster_model = False

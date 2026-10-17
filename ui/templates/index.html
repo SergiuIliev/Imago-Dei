@@ -142,8 +142,16 @@
             </div>
           </div>
 
+          <div id="micStatusIndicator" class="mic-status-indicator" style="display:none;">
+            <span class="mic-pulse-dot"></span>
+            <span id="micStatusText">Listening... Click mic again to finish and transcribe</span>
+          </div>
+
           <div class="m3-chat-input-bar">
-            <textarea id="chatInput" placeholder="Ask about an experience, belief, or decision (e.g. 'What was your philosophy on work in your early 20s?')"></textarea>
+            <button id="micRecordBtn" class="m3-mic-fab" title="Push-to-Talk: Click to speak (local Whisper ASR)">
+              <span class="material-symbols-outlined" id="micIcon">mic</span>
+            </button>
+            <textarea id="chatInput" placeholder="Ask about an experience, belief, or decision (or click mic to speak)..."></textarea>
             <button id="sendMessageBtn" class="m3-send-fab" title="Send message">
               <span class="material-symbols-outlined">send</span>
             </button>

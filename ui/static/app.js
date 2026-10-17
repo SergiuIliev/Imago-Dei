@@ -81,12 +81,113 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentEraTag) currentEraTag.innerText = selectedText;
   });
 
-  // Chat Logic
+  // Chat Logic & Multi-Turn Session
   const chatMessages = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
   const sendMessageBtn = document.getElementById("sendMessageBtn");
   const voiceAutoPlay = document.getElementById("voiceAutoPlay");
   const clearChatBtn = document.getElementById("clearChatBtn");
+  const micRecordBtn = document.getElementById("micRecordBtn");
+  const micStatusIndicator = document.getElementById("micStatusIndicator");
+  const micStatusText = document.getElementById("micStatusText");
+  const micIcon = document.getElementById("micIcon");
+
+  let currentSessionId = null;
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let isRecording = false;
+
+  // Initialize or fetch conversational session
+  async function initSession() {
+    try {
+      const res = await fetch("/api/chat/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Web Dialogue" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        currentSessionId = data.session_id;
+      }
+    } catch (e) {
+      console.warn("Session init fallback:", e);
+    }
+  }
+  initSession();
+
+  // Push-to-Talk Microphone Recording with MediaRecorder API
+  if (micRecordBtn) {
+    micRecordBtn.addEventListener("click", async () => {
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioChunks = [];
+          const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
+            ? "audio/webm;codecs=opus" 
+            : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "");
+          mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            if (audioChunks.length === 0) return;
+            const blobType = mediaRecorder.mimeType || "audio/webm";
+            const audioBlob = new Blob(audioChunks, { type: blobType });
+            await transcribeAudioAndSend(audioBlob);
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          micRecordBtn.classList.add("recording");
+          if (micIcon) micIcon.innerText = "stop";
+          if (micStatusIndicator) micStatusIndicator.style.display = "flex";
+          if (micStatusText) micStatusText.innerText = "Listening... Speak naturally, then click mic to transcribe.";
+        } catch (err) {
+          alert(`Microphone access error: ${err.message}`);
+        }
+      } else {
+        isRecording = false;
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+        micRecordBtn.classList.remove("recording");
+        if (micIcon) micIcon.innerText = "mic";
+        if (micStatusText) micStatusText.innerText = "Transcribing speech via local Whisper...";
+      }
+    });
+  }
+
+  async function transcribeAudioAndSend(audioBlob) {
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "recording.webm");
+
+    try {
+      if (micStatusIndicator) micStatusIndicator.style.display = "flex";
+      if (micStatusText) micStatusText.innerText = "Transcribing with local Whisper on Apple Silicon...";
+
+      const resp = await fetch("/api/asr/transcribe", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!resp.ok) throw new Error("Whisper transcription failed");
+      const result = await resp.json();
+
+      if (result.transcription && result.transcription.trim()) {
+        chatInput.value = result.transcription.trim();
+        sendMessage();
+      } else {
+        alert("No intelligible speech detected in recording.");
+      }
+    } catch (err) {
+      alert(`Transcription error: ${err.message}`);
+    } finally {
+      if (micStatusIndicator) micStatusIndicator.style.display = "none";
+    }
+  }
 
   async function sendMessage() {
     const query = chatInput.value.trim();
@@ -107,7 +208,8 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({
           query: query,
           era_id: eraSelect.value,
-          synthesize_audio: voiceAutoPlay.checked
+          synthesize_audio: voiceAutoPlay.checked,
+          session_id: currentSessionId
         })
       });
 
@@ -134,7 +236,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  clearChatBtn.addEventListener("click", () => {
+  clearChatBtn.addEventListener("click", async () => {
+    await initSession();
     chatMessages.innerHTML = `
       <div class="m3-bubble assistant message">
         <div class="bubble-top-meta">
@@ -145,7 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="m3-era-chip">${eraSelect.options[eraSelect.selectedIndex].text}</span>
         </div>
         <div class="msg-body">
-          Chat cleared. Ask me about any period in my life, personal decisions, or recorded events.
+          Conversation refreshed with a clean session. Ask me about any period in my life, personal decisions, or recorded events.
         </div>
       </div>
     `;
@@ -188,6 +291,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function appendAssistantMessage(data) {
     const msg = document.createElement("div");
     msg.className = "m3-bubble assistant message";
+    const msgId = "msg_" + Math.random().toString(36).substr(2, 9);
+    msg.id = msgId;
 
     const eraText = eraSelect.options[eraSelect.selectedIndex].text;
     let evidenceHtml = "";
@@ -199,8 +304,14 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>📚 Grounded Source Evidence (${data.evidence_used.length} sources)</span>
           </div>
           ${data.evidence_used.map(ev => `
-            <div class="evidence-citation-line">
-              • ${escapeHtml(ev.citation)}
+            <div class="evidence-citation-line" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 4px 0;">
+              <span>• ${escapeHtml(ev.citation)}</span>
+              ${ev.audio_clip_url ? `
+                <button class="hear-clip-btn" onclick="playAudio('${ev.audio_clip_url}')" title="Listen to original vlog recording">
+                  <span class="material-symbols-outlined" style="font-size:13px;">headphones</span>
+                  <span>Hear Vlog Clip</span>
+                </button>
+              ` : ''}
             </div>
           `).join("")}
         </div>
@@ -211,18 +322,31 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="evidence-title-row" style="color: var(--md-sys-color-warning);">
             <span>⚠️ Archive Notice: No direct recorded memory found</span>
           </div>
-          <div class="evidence-citation-line">Stated honest uncertainty or extrapolated based on era worldview.</div>
+          <div class="evidence-citation-line">Stated honest uncertainty without fabricating personal facts.</div>
         </div>
       `;
     }
 
-    let audioButtonHtml = "";
+    const emotion = data.recommended_delivery ? data.recommended_delivery.emotion : 'reflective';
+    let voiceControlsHtml = "";
     if (data.audio_url) {
-      audioButtonHtml = `
-        <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
-          <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
-          <span>Play Voice (${data.recommended_delivery ? data.recommended_delivery.emotion : 'expressive'})</span>
-        </button>
+      voiceControlsHtml = `
+        <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
+            <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
+            <span>Play Voice (${emotion})</span>
+          </button>
+        </div>
+      `;
+    } else {
+      voiceControlsHtml = `
+        <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+          <button class="m3-btn m3-btn-outlined" id="synthBtn_${msgId}" onclick="synthesizeMessageVoice('${msgId}', ${escapeHtml(JSON.stringify(data.text))}, '${emotion}')">
+            <span class="material-symbols-outlined" style="font-size:16px;">graphic_eq</span>
+            <span>Synthesize Voice (${emotion})</span>
+          </button>
+          <div id="audioSlot_${msgId}"></div>
+        </div>
       `;
     }
 
@@ -237,12 +361,51 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="msg-body">
         ${escapeHtml(data.text)}
         ${evidenceHtml}
-        ${audioButtonHtml}
+        ${voiceControlsHtml}
       </div>
     `;
     chatMessages.appendChild(msg);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+
+  // On-demand Voice Synthesis for message bubble
+  window.synthesizeMessageVoice = async function(msgId, text, emotion) {
+    const btn = document.getElementById(`synthBtn_${msgId}`);
+    const slot = document.getElementById(`audioSlot_${msgId}`);
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;">sync</span><span>Synthesizing...</span>`;
+    }
+
+    try {
+      const res = await fetch("/api/tts/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          emotion: emotion || "reflective",
+          speech_rate: 1.0
+        })
+      });
+      if (!res.ok) throw new Error("Synthesis failed");
+      const data = await res.json();
+      if (btn) btn.style.display = "none";
+      if (slot && data.audio_url) {
+        slot.innerHTML = `
+          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
+            <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
+            <span>Play Voice (${emotion})</span>
+          </button>
+        `;
+        playAudio(data.audio_url);
+      }
+    } catch (e) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;">error</span><span>Error: ${e.message}</span>`;
+      }
+    }
+  };
 
   // Audio Playback
   window.playAudio = function(url) {

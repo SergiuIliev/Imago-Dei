@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -42,6 +42,7 @@ from providers.llm.ollama_provider import OllamaLLMProvider
 from providers.llm.mock_provider import MockLLMProvider
 from providers.tts.macos_tts import MacOSNativeTTSProvider
 from providers.avatar.liveportrait_provider import LivePortraitAvatarProvider
+from providers.asr.whisper_provider import PyAVWhisperASRProvider
 from ingestion.pipeline import MediaIngestionPipeline
 
 
@@ -113,6 +114,9 @@ avatar_provider = LivePortraitAvatarProvider(
 
 # Media Ingestion Pipeline
 ingestion_pipeline = MediaIngestionPipeline(config, db, vector_store)
+
+# Local ASR Speech-to-Text Provider
+asr_provider = PyAVWhisperASRProvider(model_size=config.asr.model_size)
 
 
 # --- Pydantic Request Models ---
@@ -302,6 +306,37 @@ async def serve_audio(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(str(file_path), media_type="audio/wav")
+
+
+@app.post("/api/asr/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """Transcribes user speech from push-to-talk microphone audio (webm/wav/mp4) via local Whisper."""
+    import tempfile
+    suffix = Path(audio.filename or "recording.webm").suffix or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = tmp.name
+        content = await audio.read()
+        tmp.write(content)
+
+    try:
+        segments = asr_provider.transcribe(tmp_path, source_id="user_mic")
+        full_text = " ".join(seg.text for seg in segments).strip()
+        total_duration = segments[-1].end_seconds if segments else 0.0
+        return {
+            "status": "ok",
+            "transcription": full_text,
+            "segments": [s.to_dict() for s in segments],
+            "duration_seconds": total_duration,
+            "language": segments[0].language if segments else "en"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ASR transcription error: {str(e)}")
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 @app.get("/api/memories")

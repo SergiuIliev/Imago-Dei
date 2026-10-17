@@ -125,6 +125,22 @@ class TestAPIEndpoints(unittest.TestCase):
         resp_nf = self.client.get("/api/media/nonexistent-id/clip?start=0&end=5")
         self.assertEqual(resp_nf.status_code, 404)
 
+    def test_api_asr_transcribe(self):
+        """Verifies ASR transcription endpoint processes audio files."""
+        ref_wav = PROJECT_ROOT / "data" / "capsule" / "voice_references" / "sergiu_ref_10.wav"
+        if ref_wav.exists():
+            with open(ref_wav, "rb") as f:
+                resp = self.client.post(
+                    "/api/asr/transcribe",
+                    files={"audio": ("sergiu_ref_10.wav", f, "audio/wav")}
+                )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("transcription", data)
+            self.assertGreater(len(data["transcription"]), 0)
+            self.assertIn("accent", data["transcription"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

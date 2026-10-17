@@ -633,6 +633,87 @@ body {
   transform: scale(1.05);
 }
 
+/* Push-to-Talk Microphone FAB & Status */
+.m3-mic-fab {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background-color: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--md-sys-motion-duration-short);
+}
+
+.m3-mic-fab:hover {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  transform: scale(1.05);
+}
+
+.m3-mic-fab.recording {
+  background-color: #ff3b30;
+  color: #ffffff;
+  border-color: #ff3b30;
+  animation: pulse-recording 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-recording {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(255, 59, 48, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+}
+
+.mic-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background-color: rgba(255, 59, 48, 0.12);
+  border-radius: 16px;
+  font-size: 12px;
+  color: #ff6961;
+  margin: 0 20px 8px 20px;
+  border: 1px solid rgba(255, 59, 48, 0.25);
+}
+
+.mic-pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ff3b30;
+  border-radius: 50%;
+  animation: blink-dot 1s infinite alternate;
+}
+
+@keyframes blink-dot {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+
+.hear-clip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hear-clip-btn:hover {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-color: var(--md-sys-color-primary);
+}
+
 /* M3 Filter Chips Row */
 .m3-chips-row {
   display: flex;
