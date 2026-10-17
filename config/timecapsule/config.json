@@ -1,0 +1,53 @@
+{
+  "storage": {
+    "base_dir": "/Users/Sergiu/AI/Time_Capsule",
+    "data_dir": "/Users/Sergiu/AI/Time_Capsule/data/capsule",
+    "sqlite_db_path": "/Users/Sergiu/AI/Time_Capsule/data/capsule/archive.db",
+    "chroma_dir": "/Users/Sergiu/AI/Time_Capsule/data/capsule/vector_store",
+    "media_input_dir": "/Users/Sergiu/AI/Time_Capsule/vlogs",
+    "exports_dir": "/Users/Sergiu/AI/Time_Capsule/exports",
+    "audio_output_dir": "/Users/Sergiu/AI/Time_Capsule/data/capsule/audio_cache",
+    "models_dir": "/Users/Sergiu/AI/models"
+  },
+  "llm": {
+    "provider": "ollama",
+    "endpoint": "http://127.0.0.1:11434",
+    "model_name": "llama3.2:3b",
+    "fallback_model": "gemma2:2b",
+    "temperature": 0.4,
+    "context_window": 8192,
+    "timeout_seconds": 45.0
+  },
+  "embedding": {
+    "provider": "chroma_onnx",
+    "model_name": "all-MiniLM-L6-v2",
+    "dimension": 384,
+    "batch_size": 32
+  },
+  "asr": {
+    "provider": "pyav_whisper",
+    "model_size": "base",
+    "compute_type": "float32",
+    "device": "cpu"
+  },
+  "tts": {
+    "provider": "macos_native",
+    "default_voice": "Daniel",
+    "sample_rate": 24000,
+    "allow_reference_cloning": true,
+    "reference_audio_dir": "/Users/Sergiu/AI/Time_Capsule/data/capsule/voice_references"
+  },
+  "avatar": {
+    "provider": "liveportrait_stub",
+    "target_fps": 25,
+    "resolution": "512x512",
+    "reference_portrait_image": ""
+  },
+  "security": {
+    "local_only": true,
+    "disable_telemetry": true,
+    "bind_host": "127.0.0.1",
+    "bind_port": 7860,
+    "allow_remote_tunnels": false
+  }
+}

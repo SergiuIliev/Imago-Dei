@@ -1,0 +1,382 @@
+"""
+FastAPI Application and Local REST API for Personal AI Time Capsule.
+Integrates Conversation Engine, Memory Vault, Audio Synthesis,
+Avatar Rendering, Ingestion, and Backup/Disaster Recovery.
+"""
+
+from __future__ import annotations
+import os
+import uuid
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+import sys
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from core.models import (
+    MemoryItem,
+    TemporalBelief,
+    MemoryCorrection,
+    VerificationStatus,
+    EmotionCategory,
+    ExpressiveDeliveryParams
+)
+from core.config import CapsuleConfig, ensure_directories
+from memory.database import DatabaseManager
+from memory.vector_store import VectorStore
+from memory.retrieval import HybridRetrievalProvider
+from memory.backup import BackupManager
+from core.personality import PersonalityProfile
+from core.conversation import ConversationEngine
+from core.voice import ExpressiveDeliveryController, VoiceProfile
+from providers.llm.ollama_provider import OllamaLLMProvider
+from providers.llm.mock_provider import MockLLMProvider
+from providers.tts.macos_tts import MacOSNativeTTSProvider
+from providers.avatar.liveportrait_provider import LivePortraitAvatarProvider
+from ingestion.pipeline import MediaIngestionPipeline
+
+
+# Initialize configuration and paths
+config = CapsuleConfig.load_or_create()
+ensure_directories(config)
+
+app = FastAPI(
+    title="Personal AI Time Capsule",
+    description="Locally runnable private AI representation preserving personal memory, voice, and evolving identity.",
+    version="1.0.0"
+)
+
+# Mount static files and templates
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "ui" / "static"
+TEMPLATES_DIR = BASE_DIR / "ui" / "templates"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Initialize Subsystems
+db = DatabaseManager(config.storage.sqlite_db_path)
+vector_store = VectorStore(config.storage.chroma_dir)
+retrieval = HybridRetrievalProvider(db, vector_store)
+backup_mgr = BackupManager(config, db)
+
+# Select LLM Provider
+if config.llm.provider == "ollama":
+    llm = OllamaLLMProvider(config.llm)
+    if not llm.is_healthy():
+        print("[App] Ollama not responsive, using fallback Mock LLM Provider.")
+        llm = MockLLMProvider()
+else:
+    llm = MockLLMProvider()
+
+personality = PersonalityProfile()
+conversation_engine = ConversationEngine(retrieval, db, llm, personality)
+
+# Voice & TTS Provider
+delivery_controller = ExpressiveDeliveryController()
+if config.tts.provider in ["kokoro", "neural"]:
+    fallback_tts = MacOSNativeTTSProvider(
+        default_voice="Daniel",
+        sample_rate=config.tts.sample_rate,
+        delivery_controller=delivery_controller
+    )
+    from providers.tts.neural_tts import NeuralTTSProvider
+    tts_provider = NeuralTTSProvider(
+        model_name="kokoro-82m",
+        voice_profile=delivery_controller.profile,
+        fallback_provider=fallback_tts
+    )
+else:
+    tts_provider = MacOSNativeTTSProvider(
+        default_voice=config.tts.default_voice,
+        sample_rate=config.tts.sample_rate,
+        delivery_controller=delivery_controller
+    )
+
+# Avatar Provider
+avatar_provider = LivePortraitAvatarProvider(
+    output_dir=os.path.join(config.storage.data_dir, "avatar_cache"),
+    target_fps=config.avatar.target_fps,
+    resolution=config.avatar.resolution
+)
+
+# Media Ingestion Pipeline
+ingestion_pipeline = MediaIngestionPipeline(config, db, vector_store)
+
+
+# --- Pydantic Request Models ---
+
+class ChatRequest(BaseModel):
+    query: str
+    era_id: Optional[str] = None
+    verification_filter: Optional[str] = None
+    synthesize_audio: bool = False
+    force_simulation: bool = False
+
+
+class TTSRequest(BaseModel):
+    text: str
+    emotion: str = "neutral"
+    intensity: float = 0.5
+    speech_rate: float = 1.0
+    pitch_shift: float = 0.0
+    voice: Optional[str] = None
+
+
+class MemoryCorrectionRequest(BaseModel):
+    memory_id: str
+    corrected_content: str
+    correction_reason: str
+
+
+class IngestionRequest(BaseModel):
+    target_directory: Optional[str] = None
+    is_synthetic_fixture: bool = False
+
+
+# --- API Routes ---
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_index(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "snapshots": personality.list_snapshots(),
+            "stats": db.get_archive_stats()
+        }
+    )
+
+
+@app.get("/api/health")
+async def health_check():
+    """System health check across all subcomponents."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": True,
+        "vector_store": vector_store.is_available,
+        "llm_provider": {
+            "name": config.llm.provider,
+            "healthy": llm.is_healthy(),
+            "info": llm.get_model_info()
+        },
+        "tts_provider": {
+            "name": config.tts.provider,
+            "healthy": tts_provider.is_healthy(),
+            "voices": tts_provider.list_available_voices()[:5]
+        },
+        "avatar_provider": {
+            "name": config.avatar.provider,
+            "healthy": avatar_provider.is_healthy()
+        },
+        "security": {
+            "local_only": config.security.local_only,
+            "telemetry_disabled": config.security.disable_telemetry
+        }
+    }
+
+
+@app.get("/api/eras")
+async def get_eras():
+    """Lists available chronological persona snapshots."""
+    return [s.to_dict() for s in personality.list_snapshots()]
+
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    """Processes conversational turn with grounded retrieval, citations, and optional TTS."""
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    resp = conversation_engine.process_turn(
+        query=req.query,
+        era_id=req.era_id,
+        verification_filter=req.verification_filter,
+        force_simulation=req.force_simulation
+    )
+
+    audio_url = None
+    if req.synthesize_audio:
+        try:
+            filename = f"chat_{uuid.uuid4().hex[:10]}.wav"
+            out_path = os.path.join(config.storage.audio_output_dir, filename)
+            tts_provider.synthesize(
+                text=resp.text,
+                delivery=resp.recommended_delivery,
+                output_file_path=out_path
+            )
+            audio_url = f"/api/audio/{filename}"
+        except Exception as e:
+            print(f"[Chat] TTS error: {e}")
+
+    result = resp.to_dict()
+    result["audio_url"] = audio_url
+    return result
+
+
+@app.post("/api/tts/synthesize")
+async def synthesize_tts(req: TTSRequest):
+    """Synthesizes text into 24kHz audio matching delivery parameters."""
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty.")
+
+    try:
+        emotion_cat = EmotionCategory(req.emotion)
+    except ValueError:
+        emotion_cat = EmotionCategory.NEUTRAL
+
+    delivery = ExpressiveDeliveryParams(
+        emotion=emotion_cat,
+        intensity=req.intensity,
+        speech_rate=req.speech_rate,
+        pitch_shift=req.pitch_shift
+    )
+
+    filename = f"tts_{uuid.uuid4().hex[:10]}.wav"
+    out_path = os.path.join(config.storage.audio_output_dir, filename)
+
+    try:
+        tts_provider.synthesize(
+            text=req.text,
+            delivery=delivery,
+            output_file_path=out_path,
+            voice_override=req.voice
+        )
+        return {
+            "status": "success",
+            "audio_url": f"/api/audio/{filename}",
+            "filename": filename,
+            "delivery": delivery.to_dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/audio/{filename}")
+async def serve_audio(filename: str):
+    """Serves synthesized audio files from local cache."""
+    file_path = Path(config.storage.audio_output_dir) / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(str(file_path), media_type="audio/wav")
+
+
+@app.get("/api/memories")
+async def list_memories(limit: int = 100, status: Optional[str] = None):
+    """Lists memories from SQLite archive with optional verification filter."""
+    mems = db.list_memories(limit=limit, status_filter=status)
+    return [m.to_dict() for m in mems]
+
+
+@app.post("/api/memories/correct")
+async def correct_memory(req: MemoryCorrectionRequest):
+    """Applies a user correction to a memory and promotes it to personal_verified."""
+    mem = db.get_memory(req.memory_id)
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    corr = MemoryCorrection(
+        memory_id=req.memory_id,
+        original_content=mem.content,
+        corrected_content=req.corrected_content,
+        correction_reason=req.correction_reason,
+        corrected_by="user",
+        created_at=datetime.utcnow().isoformat()
+    )
+
+    success = db.correct_memory(corr)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to apply memory correction")
+
+    # Update vector embedding
+    updated_mem = db.get_memory(req.memory_id)
+    if updated_mem:
+        vector_store.add_memory_embedding(updated_mem)
+
+    return {"status": "success", "memory": updated_mem.to_dict() if updated_mem else None}
+
+
+@app.get("/api/beliefs")
+async def list_beliefs(topic: Optional[str] = None):
+    """Lists temporal beliefs illustrating value evolution across life eras."""
+    if topic:
+        beliefs = db.get_beliefs_for_topic(topic)
+    else:
+        beliefs = db.list_all_beliefs()
+    return [b.to_dict() for b in beliefs]
+
+
+@app.get("/api/archive/stats")
+async def get_stats():
+    """Archive counts and storage overview."""
+    stats = db.get_archive_stats()
+    stats["models"] = llm.get_model_info()
+    return stats
+
+
+@app.get("/api/media")
+async def list_media():
+    """Lists all ingested media source files."""
+    media_list = db.list_all_media()
+    return [m.to_dict() for m in media_list]
+
+
+@app.post("/api/ingestion/run")
+async def run_ingestion(req: IngestionRequest):
+    """Triggers ingestion pipeline for a target folder or synthetic fixture."""
+    res = ingestion_pipeline.run_ingestion_job(target_directory=req.target_directory)
+    return res
+
+
+@app.post("/api/avatar/render")
+async def create_avatar_render(audio_filename: str = Form(...)):
+    """Enqueues an audio-driven avatar render job."""
+    audio_path = os.path.join(config.storage.audio_output_dir, audio_filename)
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Source audio file not found")
+
+    job = avatar_provider.create_render_job(audio_path=audio_path)
+    return job.to_dict()
+
+
+@app.get("/api/avatar/status/{job_id}")
+async def get_avatar_status(job_id: str):
+    """Queries avatar render job status and output video path."""
+    job = avatar_provider.get_job_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job.to_dict()
+
+
+@app.get("/api/avatar/video/{filename}")
+async def serve_avatar_video(filename: str):
+    """Serves rendered avatar MP4 video."""
+    video_path = Path(config.storage.data_dir) / "avatar_cache" / filename
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    return FileResponse(str(video_path), media_type="video/mp4")
+
+
+@app.post("/api/backup/create")
+async def create_backup():
+    """Creates a timestamped .tar.gz archive backup with SHA-256 manifest."""
+    res = backup_mgr.create_full_backup()
+    return res
+
+
+@app.get("/api/config")
+async def get_config():
+    """Returns application configuration."""
+    return config.to_dict()

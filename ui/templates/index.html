@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal AI Time Capsule — Sergiu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Material 3 Navigation Drawer -->
+    <aside class="m3-navigation-drawer">
+      <div class="drawer-header">
+        <div class="app-logo-avatar">
+          <span class="material-symbols-outlined" style="font-size:26px;">hourglass_empty</span>
+        </div>
+        <div class="app-titles">
+          <h2>Time Capsule</h2>
+          <span class="subtitle">Personal AI Archive</span>
+        </div>
+      </div>
+
+      <!-- Active Persona Snapshot Card -->
+      <div class="m3-era-card">
+        <div class="label-row">
+          <label for="eraSelect">
+            <span class="pulse-indicator"></span> Active Persona Snapshot
+          </label>
+        </div>
+        <select id="eraSelect" class="m3-select">
+          {% for snap in snapshots %}
+          <option value="{{ snap.era_id }}" {% if snap.era_id == 'present' %}selected{% endif %}>
+            {{ snap.era_name }}
+          </option>
+          {% endfor %}
+        </select>
+        <div id="eraDescription" class="era-context-hint">
+          Present Day: High clarity, autonomy, agentic AI systems, and calm strategic thinking.
+        </div>
+      </div>
+
+      <!-- M3 Navigation List -->
+      <nav class="m3-nav-list">
+        <button class="m3-nav-item active" data-tab="conversation">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">forum</span>
+          </span>
+          <span>Conversation</span>
+        </button>
+        <button class="m3-nav-item" data-tab="memories">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">psychology</span>
+          </span>
+          <span>Memory Vault</span>
+        </button>
+        <button class="m3-nav-item" data-tab="beliefs">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">timeline</span>
+          </span>
+          <span>Belief Timeline</span>
+        </button>
+        <button class="m3-nav-item" data-tab="ingestion">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">video_library</span>
+          </span>
+          <span>Archive & Media</span>
+        </button>
+        <button class="m3-nav-item" data-tab="voice-avatar">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">record_voice_over</span>
+          </span>
+          <span>Voice & Avatar</span>
+        </button>
+        <button class="m3-nav-item" data-tab="system">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">tune</span>
+          </span>
+          <span>System & Config</span>
+        </button>
+      </nav>
+
+      <!-- Drawer Footer -->
+      <div class="drawer-footer">
+        <div class="m3-privacy-badge">
+          <span class="material-symbols-outlined" style="font-size:18px;">lock</span>
+          <span>100% Local · Zero Telemetry</span>
+        </div>
+        <div class="m3-stats-row" id="sidebarStats">
+          <span>Memories: <strong id="statMemoriesCount">{{ stats.total_memories }}</strong></span>
+          <span>Verified: <strong id="statVerifiedCount">{{ stats.verified_memories }}</strong></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Surface -->
+    <main class="main-surface">
+      <!-- Material 3 Top App Bar -->
+      <header class="m3-top-app-bar">
+        <div class="title-group">
+          <h1 id="pageTitle">Dialogue with My Past & Present Self</h1>
+          <p id="pageSubhead" class="subhead">Evidence-grounded conversational synthesis across chronological eras</p>
+        </div>
+        <div class="app-bar-actions">
+          <label class="m3-switch-label" title="Automatically speak assistant responses">
+            <span class="m3-switch">
+              <input type="checkbox" id="voiceAutoPlay">
+              <span class="m3-switch-track"><span class="m3-switch-thumb"></span></span>
+            </span>
+            <span>Auto-synthesize Voice</span>
+          </label>
+          <button id="clearChatBtn" class="m3-btn m3-btn-outlined" title="Clear chat conversation">
+            <span class="material-symbols-outlined" style="font-size:18px;">restart_alt</span>
+            <span>Clear Chat</span>
+          </button>
+          <span class="m3-status-pill status-active" title="Security guarantee: loopback only">
+            <span class="material-symbols-outlined" style="font-size:16px;">shield_lock</span>
+            <span>Loopback Only</span>
+          </span>
+        </div>
+      </header>
+
+      <!-- Tab 1: Conversation -->
+      <section id="tab-conversation" class="tab-pane active">
+        <div class="m3-chat-surface">
+          <div id="chatMessages" class="chat-scroll-area">
+            <!-- Initial Greeting Bubble -->
+            <div class="m3-bubble assistant message">
+              <div class="bubble-top-meta">
+                <span class="author-name">
+                  <span class="material-symbols-outlined" style="font-size:16px;">smart_toy</span>
+                  <span>Sergiu (Time Capsule)</span>
+                </span>
+                <span class="m3-era-chip" id="currentEraTag">Present Day (2023-Present)</span>
+              </div>
+              <div class="msg-body">
+                Hello! I am your personal digital time capsule. I can reason across different life stages, discuss your evolving philosophies, recall specific memories with timestamps, and speak with expressive prosody. Which period or question would you like to explore?
+              </div>
+            </div>
+          </div>
+
+          <div class="m3-chat-input-bar">
+            <textarea id="chatInput" placeholder="Ask about an experience, belief, or decision (e.g. 'What was your philosophy on work in your early 20s?')"></textarea>
+            <button id="sendMessageBtn" class="m3-send-fab" title="Send message">
+              <span class="material-symbols-outlined">send</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Memory Vault -->
+      <section id="tab-memories" class="tab-pane">
+        <div class="m3-chips-row">
+          <button class="m3-filter-chip active" data-filter="">All Verification Tiers</button>
+          <button class="m3-filter-chip" data-filter="personal_verified">Verified Personal Memories</button>
+          <button class="m3-filter-chip" data-filter="extracted_unverified">Extracted Unverified</button>
+          <button class="m3-filter-chip" data-filter="synthetic_fixture">Synthetic Test Fixtures</button>
+          <select id="memoryStatusFilter" style="display:none;">
+            <option value="">All Verification Tiers</option>
+            <option value="personal_verified">Verified Personal Memories</option>
+            <option value="extracted_unverified">Extracted Unverified</option>
+            <option value="synthetic_fixture">Synthetic Test Fixtures</option>
+          </select>
+          <div style="flex-grow:1; display:flex; justify-content:flex-end;">
+            <input type="text" id="memorySearchInput" class="m3-text-field" style="max-width:320px;" placeholder="Search memories by keyword...">
+          </div>
+        </div>
+
+        <div class="m3-card-grid" id="memoryGrid">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- Tab 3: Belief Timeline -->
+      <section id="tab-beliefs" class="tab-pane">
+        <div class="m3-timeline" id="beliefsTimeline">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- Tab 4: Archive & Ingestion -->
+      <section id="tab-ingestion" class="tab-pane">
+        <div class="m3-dashboard-grid">
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600;">Personal Vlog Directory Status</h3>
+              <span class="m3-status-pill status-waiting">Awaiting Personal Vlog Path</span>
+            </div>
+            <div class="m3-card-body">
+              <p>You have not configured a personal media directory yet. The system is operating in independent foundation mode with verified test fixtures.</p>
+              <div class="m3-input-group">
+                <input type="text" id="vlogPathInput" placeholder="/Users/Sergiu/Movies/Vlogs (Leave empty until ready)">
+                <button id="saveVlogPathBtn" class="m3-btn m3-btn-tonal">Save Path</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600;">Synthetic Fixture Pipeline Verification</h3>
+              <span class="m3-badge m3-badge-synthetic">Regression Test</span>
+            </div>
+            <div class="m3-card-body">
+              <p>Pass synthetic test media through SHA-256 deduplication, PyAV demuxing, and memory indexing to verify pipeline readiness.</p>
+              <button id="runSyntheticIngestionBtn" class="m3-btn m3-btn-filled" style="margin-top:12px;">
+                <span class="material-symbols-outlined" style="font-size:18px;">play_arrow</span>
+                <span>Run Synthetic Ingestion Test</span>
+              </button>
+              <div id="ingestionOutput" class="m3-console-box">Ready.</div>
+            </div>
+          </div>
+
+          <div class="m3-card" style="grid-column: 1 / -1;">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600;">Ingested Media Inventory</h3>
+            </div>
+            <div class="m3-card-body" style="padding:0;">
+              <div class="m3-table-wrapper">
+                <table id="mediaTable">
+                  <thead>
+                    <tr>
+                      <th>Filename</th>
+                      <th>Format</th>
+                      <th>Duration</th>
+                      <th>Status</th>
+                      <th>Checksum (SHA-256)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mediaTableBody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: Voice & Avatar Studio -->
+      <section id="tab-voice-avatar" class="tab-pane">
+        <div class="m3-dashboard-grid">
+          <!-- Voice Synthesizer Card -->
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">record_voice_over</span>
+                <span>Expressive Voice Synthesizer</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <div class="m3-form-group">
+                <label>Speech Text:</label>
+                <textarea id="ttsTextInput" rows="3">Looking back on what we built, every system was a stepping stone toward genuine autonomy.</textarea>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                <div class="m3-form-group">
+                  <label>Emotional Tone:</label>
+                  <select id="ttsEmotionSelect" class="m3-select">
+                    <option value="reflective" selected>Reflective (Contemplative, Measured)</option>
+                    <option value="lively">Lively (Energetic, Fast Cadence)</option>
+                    <option value="curious">Curious (Inquisitive, Melodic)</option>
+                    <option value="serious">Serious (Direct, Grounded)</option>
+                    <option value="humorous">Humorous (Playful, Conversational)</option>
+                    <option value="neutral">Neutral (Factual)</option>
+                  </select>
+                </div>
+                <div class="m3-slider-group">
+                  <label>Speech Rate: <span id="rateVal" style="font-weight:600; color:var(--md-sys-color-primary);">1.0x</span></label>
+                  <input type="range" id="ttsRateRange" class="m3-slider" min="0.8" max="1.3" step="0.05" value="1.0">
+                </div>
+              </div>
+              <button id="synthesizeBtn" class="m3-btn m3-btn-filled" style="width:100%; margin-top:8px;">
+                <span class="material-symbols-outlined" style="font-size:18px;">graphic_eq</span>
+                <span>Synthesize Expressive Audio</span>
+              </button>
+              <div class="audio-player-box" id="audioPlayerContainer">
+                <audio id="ttsAudioPlayer" controls style="display:none; width: 100%; margin-top: 15px;"></audio>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Avatar Card -->
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">person_pin</span>
+                <span>Video Avatar Pipeline (Future LivePortrait)</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <div class="m3-avatar-stage">
+                <div id="avatarPlaceholder" class="avatar-placeholder-content">
+                  <div class="avatar-large-icon">
+                    <span class="material-symbols-outlined" style="font-size:64px;">person_outline</span>
+                  </div>
+                  <p><strong>Integration Boundary Ready</strong></p>
+                  <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant);">Awaiting personal reference portrait & video footage</span>
+                </div>
+                <video id="avatarVideoPlayer" controls style="display:none; width: 100%; max-height: 270px; border-radius: 12px;"></video>
+              </div>
+              <button id="renderAvatarBtn" class="m3-btn m3-btn-tonal" style="width:100%; margin-top:16px;">
+                <span class="material-symbols-outlined" style="font-size:18px;">movie</span>
+                <span>Render Synthetic Avatar Test Video</span>
+              </button>
+              <div id="avatarStatusBox" style="font-size:12px; color:var(--md-sys-color-on-surface-variant); margin-top: 10px; text-align:center;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 6: System & Config -->
+      <section id="tab-system" class="tab-pane">
+        <div class="m3-dashboard-grid">
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">memory</span>
+                <span>Machine & Model Runtime</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <ul class="m3-specs-list">
+                <li><strong>Host:</strong> Apple Silicon M4 (24 GB Unified Memory, Metal MPS)</li>
+                <li><strong>LLM Provider:</strong> Ollama (Llama 3.2 3B & Gemma 2 2B)</li>
+                <li><strong>Embedding Model:</strong> all-MiniLM-L6-v2 (ChromaDB ONNX)</li>
+                <li><strong>Speech Synthesis:</strong> macOS Native Speech (24kHz WAV, Daniel)</li>
+                <li><strong>Ingestion Engine:</strong> PyAV (FFmpeg 18.1.0 C-bindings) + CTranslate2</li>
+                <li><strong>Network Invariant:</strong> Loopback Only (127.0.0.1) · Zero Cloud Outbound</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="m3-card">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">backup</span>
+                <span>Full Archive Backup & Export</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <p>Generate a self-contained, timestamped <code>.tar.gz</code> archive containing the complete SQLite database, vector embeddings, and cryptographic SHA-256 manifests.</p>
+              <button id="createBackupBtn" class="m3-btn m3-btn-filled" style="margin-top:14px;">
+                <span class="material-symbols-outlined" style="font-size:18px;">archive</span>
+                <span>Create Full Backup Archive</span>
+              </button>
+              <div id="backupOutput" class="m3-console-box">No backup run in this session.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Material 3 Memory Correction Dialog -->
+  <div id="correctionModal" class="m3-dialog-scrim" style="display:none;">
+    <div class="m3-dialog-card">
+      <h2 style="font-size:20px; font-weight:600; color:var(--md-sys-color-on-surface);">Correct / Verify Memory</h2>
+      <p style="font-size:13px; color:var(--md-sys-color-on-surface-variant); margin-top:4px; margin-bottom:20px;">
+        Edits are preserved with an immutable audit log and automatically promoted to <code>[PERSONAL_VERIFIED]</code>.
+      </p>
+      <input type="hidden" id="modalMemoryId">
+      <div class="m3-form-group">
+        <label>Memory Content:</label>
+        <textarea id="modalMemoryContent" rows="4"></textarea>
+      </div>
+      <div class="m3-form-group">
+        <label>Reason for Correction / Notes:</label>
+        <input type="text" id="modalCorrectionReason" placeholder="Clarifying the exact year and context...">
+      </div>
+      <div class="m3-dialog-actions">
+        <button id="cancelCorrectionBtn" class="m3-btn m3-btn-text">Cancel</button>
+        <button id="saveCorrectionBtn" class="m3-btn m3-btn-filled">Save & Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

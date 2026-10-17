@@ -1,0 +1,609 @@
+/**
+ * Material Design 3 Controller for Personal AI Time Capsule — Sergiu.
+ * Coordinates Conversation Dialogue, Memory Vault, Belief Timeline,
+ * Expressive Voice Synthesis, Video Avatar, and Archive Disaster Recovery.
+ */
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Navigation & Page Title Sync
+  const navItems = document.querySelectorAll(".m3-nav-item, .nav-item");
+  const tabPanes = document.querySelectorAll(".tab-pane");
+  const pageTitle = document.getElementById("pageTitle");
+  const pageSubhead = document.getElementById("pageSubhead");
+
+  const tabMeta = {
+    "conversation": {
+      title: "Dialogue with My Past & Present Self",
+      subhead: "Evidence-grounded conversational synthesis across chronological eras"
+    },
+    "memories": {
+      title: "Memory Vault & Evidence Index",
+      subhead: "Inspect, search, and verify atomic memories extracted from recordings"
+    },
+    "beliefs": {
+      title: "Temporal Beliefs & Value Evolution",
+      subhead: "Tracking how core philosophies, habits, and priorities evolved over time without erasing the past"
+    },
+    "ingestion": {
+      title: "Archive Ingestion Pipeline",
+      subhead: "Import personal vlogs, run Whisper transcription, and manage media checksums"
+    },
+    "voice-avatar": {
+      title: "Expressive Voice & Avatar Studio",
+      subhead: "Acoustic prosody controls, local demonstration voice, and future video avatar rendering"
+    },
+    "system": {
+      title: "System Configuration & Disaster Recovery",
+      subhead: "Host specifications, model registry status, local invariants, and backup management"
+    }
+  };
+
+  navItems.forEach(item => {
+    item.addEventListener("click", () => {
+      const targetTab = item.getAttribute("data-tab");
+      navItems.forEach(n => n.classList.remove("active"));
+      tabPanes.forEach(p => p.classList.remove("active"));
+
+      item.classList.add("active");
+      const targetPane = document.getElementById(`tab-${targetTab}`);
+      if (targetPane) targetPane.classList.add("active");
+
+      // Update Top App Bar titles
+      if (tabMeta[targetTab]) {
+        if (pageTitle) pageTitle.innerText = tabMeta[targetTab].title;
+        if (pageSubhead) pageSubhead.innerText = tabMeta[targetTab].subhead;
+      }
+
+      // Tab specific refresh
+      if (targetTab === "memories") loadMemories();
+      if (targetTab === "beliefs") loadBeliefs();
+      if (targetTab === "ingestion") loadMediaInventory();
+    });
+  });
+
+  // Era Selector
+  const eraSelect = document.getElementById("eraSelect");
+  const currentEraTag = document.getElementById("currentEraTag");
+  const eraDescription = document.getElementById("eraDescription");
+
+  const eraDescriptions = {
+    "early_20s": "Early 20s (2014-2018): High curiosity, exploratory coding, eager experimentation, discovering independence.",
+    "mid_late_20s": "Mid-to-Late 20s (2019-2022): Scalable systems, smart home automation, infrastructure resilience, pragmatic architecture.",
+    "present": "Present Day (2023-Present): High clarity, autonomy, agentic AI systems, long-term personal preservation, and calm strategic thinking."
+  };
+
+  eraSelect.addEventListener("change", () => {
+    const selected = eraSelect.value;
+    if (eraDescriptions[selected]) {
+      eraDescription.innerText = eraDescriptions[selected];
+    }
+    const selectedText = eraSelect.options[eraSelect.selectedIndex].text;
+    if (currentEraTag) currentEraTag.innerText = selectedText;
+  });
+
+  // Chat Logic
+  const chatMessages = document.getElementById("chatMessages");
+  const chatInput = document.getElementById("chatInput");
+  const sendMessageBtn = document.getElementById("sendMessageBtn");
+  const voiceAutoPlay = document.getElementById("voiceAutoPlay");
+  const clearChatBtn = document.getElementById("clearChatBtn");
+
+  async function sendMessage() {
+    const query = chatInput.value.trim();
+    if (!query) return;
+
+    // Append User Bubble
+    appendMessage("user", "You", query);
+    chatInput.value = "";
+    chatInput.focus();
+
+    // Loading Indicator
+    const loadingElem = appendLoadingMessage();
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query,
+          era_id: eraSelect.value,
+          synthesize_audio: voiceAutoPlay.checked
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed to process conversation turn.");
+      const data = await res.json();
+
+      loadingElem.remove();
+      appendAssistantMessage(data);
+
+      if (data.audio_url && voiceAutoPlay.checked) {
+        playAudio(data.audio_url);
+      }
+    } catch (err) {
+      loadingElem.remove();
+      appendMessage("assistant", "System Error", `Unable to generate response: ${err.message}`);
+    }
+  }
+
+  sendMessageBtn.addEventListener("click", sendMessage);
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  clearChatBtn.addEventListener("click", () => {
+    chatMessages.innerHTML = `
+      <div class="m3-bubble assistant message">
+        <div class="bubble-top-meta">
+          <span class="author-name">
+            <span class="material-symbols-outlined" style="font-size:16px;">smart_toy</span>
+            <span>Sergiu (Time Capsule)</span>
+          </span>
+          <span class="m3-era-chip">${eraSelect.options[eraSelect.selectedIndex].text}</span>
+        </div>
+        <div class="msg-body">
+          Chat cleared. Ask me about any period in my life, personal decisions, or recorded events.
+        </div>
+      </div>
+    `;
+  });
+
+  function appendMessage(role, author, text) {
+    const msg = document.createElement("div");
+    msg.className = `m3-bubble ${role} message`;
+    msg.innerHTML = `
+      <div class="bubble-top-meta">
+        <span class="author-name">
+          <span class="material-symbols-outlined" style="font-size:16px;">${role === 'user' ? 'person' : 'smart_toy'}</span>
+          <span>${author}</span>
+        </span>
+      </div>
+      <div class="msg-body">${escapeHtml(text)}</div>
+    `;
+    chatMessages.appendChild(msg);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return msg;
+  }
+
+  function appendLoadingMessage() {
+    const msg = document.createElement("div");
+    msg.className = "m3-bubble assistant message";
+    msg.innerHTML = `
+      <div class="bubble-top-meta">
+        <span class="author-name">
+          <span class="material-symbols-outlined" style="font-size:16px;">sync</span>
+          <span>Retrieving memories & reasoning...</span>
+        </span>
+      </div>
+      <div class="msg-body" style="font-style:italic; color:var(--md-sys-color-outline);">Consulting vector embeddings and temporal belief state...</div>
+    `;
+    chatMessages.appendChild(msg);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return msg;
+  }
+
+  function appendAssistantMessage(data) {
+    const msg = document.createElement("div");
+    msg.className = "m3-bubble assistant message";
+
+    const eraText = eraSelect.options[eraSelect.selectedIndex].text;
+    let evidenceHtml = "";
+
+    if (data.evidence_used && data.evidence_used.length > 0) {
+      evidenceHtml = `
+        <div class="m3-evidence-card">
+          <div class="evidence-title-row">
+            <span>📚 Grounded Source Evidence (${data.evidence_used.length} sources)</span>
+          </div>
+          ${data.evidence_used.map(ev => `
+            <div class="evidence-citation-line">
+              • ${escapeHtml(ev.citation)}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    } else {
+      evidenceHtml = `
+        <div class="m3-evidence-card" style="border-left-color: var(--md-sys-color-warning);">
+          <div class="evidence-title-row" style="color: var(--md-sys-color-warning);">
+            <span>⚠️ Archive Notice: No direct recorded memory found</span>
+          </div>
+          <div class="evidence-citation-line">Stated honest uncertainty or extrapolated based on era worldview.</div>
+        </div>
+      `;
+    }
+
+    let audioButtonHtml = "";
+    if (data.audio_url) {
+      audioButtonHtml = `
+        <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
+          <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
+          <span>Play Voice (${data.recommended_delivery ? data.recommended_delivery.emotion : 'expressive'})</span>
+        </button>
+      `;
+    }
+
+    msg.innerHTML = `
+      <div class="bubble-top-meta">
+        <span class="author-name">
+          <span class="material-symbols-outlined" style="font-size:16px;">smart_toy</span>
+          <span>Sergiu</span>
+        </span>
+        <span class="m3-era-chip">${escapeHtml(eraText)}</span>
+      </div>
+      <div class="msg-body">
+        ${escapeHtml(data.text)}
+        ${evidenceHtml}
+        ${audioButtonHtml}
+      </div>
+    `;
+    chatMessages.appendChild(msg);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // Audio Playback
+  window.playAudio = function(url) {
+    const audio = new Audio(url);
+    audio.play();
+  };
+
+  // Memory Vault & M3 Filter Chips
+  const memoryGrid = document.getElementById("memoryGrid");
+  const memoryStatusFilter = document.getElementById("memoryStatusFilter");
+  const memorySearchInput = document.getElementById("memorySearchInput");
+  const filterChips = document.querySelectorAll(".m3-filter-chip");
+
+  filterChips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      filterChips.forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      const val = chip.getAttribute("data-filter") || "";
+      if (memoryStatusFilter) memoryStatusFilter.value = val;
+      loadMemories();
+    });
+  });
+
+  async function loadMemories() {
+    try {
+      const status = memoryStatusFilter ? memoryStatusFilter.value : "";
+      const url = status ? `/api/memories?status=${status}` : `/api/memories`;
+      const res = await fetch(url);
+      const memories = await res.json();
+      renderMemories(memories);
+    } catch (err) {
+      memoryGrid.innerHTML = `<div class="m3-card">Error loading memories: ${err.message}</div>`;
+    }
+  }
+
+  function renderMemories(memories) {
+    const filterText = (memorySearchInput.value || "").toLowerCase();
+    const filtered = memories.filter(m => 
+      !filterText || m.content.toLowerCase().includes(filterText) || (m.summary && m.summary.toLowerCase().includes(filterText))
+    );
+
+    if (filtered.length === 0) {
+      memoryGrid.innerHTML = `<div class="m3-card" style="grid-column: 1/-1; text-align:center; padding:32px;">No memories match the current filter.</div>`;
+      return;
+    }
+
+    memoryGrid.innerHTML = filtered.map(m => {
+      let badgeClass = "m3-badge-unverified";
+      if (m.verification_status === "personal_verified") badgeClass = "m3-badge-verified";
+      if (m.verification_status === "synthetic_fixture") badgeClass = "m3-badge-synthetic";
+
+      return `
+        <div class="m3-card">
+          <div class="m3-card-header">
+            <span class="m3-badge ${badgeClass}">${m.verification_status}</span>
+            <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant); font-family:var(--md-sys-typescale-mono);">${m.date_occurred || 'Date Unknown'}</span>
+          </div>
+          <div class="m3-card-body">
+            <p>${escapeHtml(m.content)}</p>
+          </div>
+          <div class="m3-card-footer">
+            <span style="font-size:12px; color:var(--md-sys-color-outline);">Tone: <strong>${m.emotional_tone || 'neutral'}</strong></span>
+            <button class="m3-btn m3-btn-tonal" onclick="openCorrectionModal('${m.id}', '${escapeAttr(m.content)}')">
+              <span class="material-symbols-outlined" style="font-size:16px;">edit</span>
+              <span>Correct / Verify</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (memoryStatusFilter) memoryStatusFilter.addEventListener("change", loadMemories);
+  if (memorySearchInput) memorySearchInput.addEventListener("input", loadMemories);
+
+  // Correction Modal Dialog
+  const correctionModal = document.getElementById("correctionModal");
+  const modalMemoryId = document.getElementById("modalMemoryId");
+  const modalMemoryContent = document.getElementById("modalMemoryContent");
+  const modalCorrectionReason = document.getElementById("modalCorrectionReason");
+  const cancelCorrectionBtn = document.getElementById("cancelCorrectionBtn");
+  const saveCorrectionBtn = document.getElementById("saveCorrectionBtn");
+
+  window.openCorrectionModal = function(id, content) {
+    modalMemoryId.value = id;
+    modalMemoryContent.value = content;
+    modalCorrectionReason.value = "";
+    correctionModal.style.display = "flex";
+  };
+
+  cancelCorrectionBtn.addEventListener("click", () => {
+    correctionModal.style.display = "none";
+  });
+
+  saveCorrectionBtn.addEventListener("click", async () => {
+    const memId = modalMemoryId.value;
+    const newContent = modalMemoryContent.value.trim();
+    const reason = modalCorrectionReason.value.trim() || "User manual clarification";
+
+    if (!newContent) return;
+
+    try {
+      const res = await fetch("/api/memories/correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memory_id: memId,
+          corrected_content: newContent,
+          correction_reason: reason
+        })
+      });
+
+      if (!res.ok) throw new Error("Correction failed");
+      correctionModal.style.display = "none";
+      loadMemories();
+      updateSidebarStats();
+    } catch (err) {
+      alert(`Error saving correction: ${err.message}`);
+    }
+  });
+
+  // Beliefs Timeline
+  const beliefsTimeline = document.getElementById("beliefsTimeline");
+  async function loadBeliefs() {
+    try {
+      const res = await fetch("/api/beliefs");
+      const beliefs = await res.json();
+
+      if (beliefs.length === 0) {
+        beliefsTimeline.innerHTML = `<div class="m3-card">No beliefs recorded yet.</div>`;
+        return;
+      }
+
+      beliefsTimeline.innerHTML = beliefs.map(b => {
+        const itemClass = b.active ? "active" : "superseded";
+        const statusBadge = b.active 
+          ? `<span class="m3-badge m3-badge-verified">Active Belief</span>` 
+          : `<span class="m3-badge m3-badge-synthetic">Superseded Historical Belief</span>`;
+
+        return `
+          <div class="m3-timeline-item ${itemClass}">
+            <div class="timeline-header-row">
+              <span class="timeline-topic-title">${escapeHtml(b.topic)}</span>
+              <span class="timeline-era-label">${escapeHtml(b.era_label)}</span>
+            </div>
+            <div style="font-size:15px; font-style:italic; color:var(--md-sys-color-on-surface); margin:8px 0;">
+              "${escapeHtml(b.belief_statement)}"
+            </div>
+            ${b.reason_for_change ? `
+              <div style="font-size:13px; color:var(--md-sys-color-on-surface-variant); margin-top:8px; padding-left:12px; border-left:2px solid var(--md-sys-color-outline-variant);">
+                <strong>Why perspective changed:</strong> ${escapeHtml(b.reason_for_change)}
+              </div>
+            ` : ''}
+            <div style="margin-top: 14px;">${statusBadge}</div>
+          </div>
+        `;
+      }).join("");
+    } catch (err) {
+      beliefsTimeline.innerHTML = `<div class="m3-card">Error loading beliefs: ${err.message}</div>`;
+    }
+  }
+
+  // Media Ingestion
+  const mediaTableBody = document.getElementById("mediaTableBody");
+  const runSyntheticIngestionBtn = document.getElementById("runSyntheticIngestionBtn");
+  const ingestionOutput = document.getElementById("ingestionOutput");
+  const vlogPathInput = document.getElementById("vlogPathInput");
+  const saveVlogPathBtn = document.getElementById("saveVlogPathBtn");
+
+  if (saveVlogPathBtn) {
+    saveVlogPathBtn.addEventListener("click", () => {
+      const p = vlogPathInput.value.trim();
+      if (p) {
+        alert(`Vlog path configured: ${p}\nThe pipeline is ready to ingest recordings once placed in this location.`);
+      } else {
+        alert("Please enter a valid directory path.");
+      }
+    });
+  }
+
+  async function loadMediaInventory() {
+    try {
+      const res = await fetch("/api/media");
+      const media = await res.json();
+
+      if (media.length === 0) {
+        mediaTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--md-sys-color-on-surface-variant);">No media files ingested yet. Run synthetic test below.</td></tr>`;
+        return;
+      }
+
+      mediaTableBody.innerHTML = media.map(m => `
+        <tr>
+          <td><strong>${escapeHtml(m.file_path.split('/').pop())}</strong></td>
+          <td>${escapeHtml(m.mime_type || 'unknown')}</td>
+          <td>${m.duration_seconds ? m.duration_seconds.toFixed(1) + 's' : 'N/A'}</td>
+          <td><span class="m3-badge m3-badge-verified">${escapeHtml(m.status)}</span></td>
+          <td style="font-family:var(--md-sys-typescale-mono); font-size:11px; color:var(--md-sys-color-secondary);">${m.file_hash.substring(0, 16)}...</td>
+        </tr>
+      `).join("");
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  runSyntheticIngestionBtn.addEventListener("click", async () => {
+    ingestionOutput.innerText = "Running synthetic media ingestion test...";
+    try {
+      const res = await fetch("/api/ingestion/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_synthetic_fixture: true })
+      });
+      const data = await res.json();
+      ingestionOutput.innerText = JSON.stringify(data, null, 2);
+      loadMediaInventory();
+      updateSidebarStats();
+    } catch (err) {
+      ingestionOutput.innerText = `Error: ${err.message}`;
+    }
+  });
+
+  // Voice Synthesizer Studio
+  const ttsTextInput = document.getElementById("ttsTextInput");
+  const ttsEmotionSelect = document.getElementById("ttsEmotionSelect");
+  const ttsRateRange = document.getElementById("ttsRateRange");
+  const rateVal = document.getElementById("rateVal");
+  const synthesizeBtn = document.getElementById("synthesizeBtn");
+  const ttsAudioPlayer = document.getElementById("ttsAudioPlayer");
+
+  ttsRateRange.addEventListener("input", () => {
+    rateVal.innerText = `${ttsRateRange.value}x`;
+  });
+
+  let lastSynthesizedAudioFilename = null;
+
+  synthesizeBtn.addEventListener("click", async () => {
+    const text = ttsTextInput.value.trim();
+    if (!text) return;
+
+    synthesizeBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:18px;">sync</span> <span>Synthesizing...</span>`;
+    try {
+      const res = await fetch("/api/tts/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          emotion: ttsEmotionSelect.value,
+          speech_rate: parseFloat(ttsRateRange.value)
+        })
+      });
+      const data = await res.json();
+      synthesizeBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:18px;">graphic_eq</span> <span>Synthesize Expressive Audio</span>`;
+
+      if (data.audio_url) {
+        lastSynthesizedAudioFilename = data.filename;
+        ttsAudioPlayer.src = data.audio_url;
+        ttsAudioPlayer.style.display = "block";
+        ttsAudioPlayer.play();
+      }
+    } catch (err) {
+      synthesizeBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:18px;">graphic_eq</span> <span>Synthesize Expressive Audio</span>`;
+      alert(`Synthesis failed: ${err.message}`);
+    }
+  });
+
+  // Avatar Studio
+  const renderAvatarBtn = document.getElementById("renderAvatarBtn");
+  const avatarPlaceholder = document.getElementById("avatarPlaceholder");
+  const avatarVideoPlayer = document.getElementById("avatarVideoPlayer");
+  const avatarStatusBox = document.getElementById("avatarStatusBox");
+
+  renderAvatarBtn.addEventListener("click", async () => {
+    if (!lastSynthesizedAudioFilename) {
+      synthesizeBtn.click();
+      avatarStatusBox.innerText = "Synthesizing driving audio first...";
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    if (!lastSynthesizedAudioFilename) {
+      avatarStatusBox.innerText = "Please synthesize audio first.";
+      return;
+    }
+
+    avatarStatusBox.innerText = "Enqueuing video avatar render job...";
+    const formData = new FormData();
+    formData.append("audio_filename", lastSynthesizedAudioFilename);
+
+    try {
+      const res = await fetch("/api/avatar/render", {
+        method: "POST",
+        body: formData
+      });
+      const job = await res.json();
+      pollAvatarJob(job.job_id);
+    } catch (err) {
+      avatarStatusBox.innerText = `Render failed: ${err.message}`;
+    }
+  });
+
+  function pollAvatarJob(jobId) {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/avatar/status/${jobId}`);
+        const job = await res.json();
+        avatarStatusBox.innerText = `Status: ${job.status} (Progress: ${Math.round(job.progress * 100)}%)`;
+
+        if (job.status === "completed") {
+          clearInterval(interval);
+          avatarStatusBox.innerText = "Render complete! Loading MP4 video preview.";
+          avatarPlaceholder.style.display = "none";
+          avatarVideoPlayer.src = `/api/avatar/video/${job.output_video_path.split('/').pop()}`;
+          avatarVideoPlayer.style.display = "block";
+          avatarVideoPlayer.play();
+        } else if (job.status === "failed") {
+          clearInterval(interval);
+          avatarStatusBox.innerText = `Avatar render failed: ${job.error_message}`;
+        }
+      } catch (err) {
+        clearInterval(interval);
+        avatarStatusBox.innerText = `Status check error: ${err.message}`;
+      }
+    }, 400);
+  }
+
+  // Backup Manager
+  const createBackupBtn = document.getElementById("createBackupBtn");
+  const backupOutput = document.getElementById("backupOutput");
+
+  createBackupBtn.addEventListener("click", async () => {
+    backupOutput.innerText = "Creating snapshot archive...";
+    try {
+      const res = await fetch("/api/backup/create", { method: "POST" });
+      const data = await res.json();
+      backupOutput.innerText = `Archive created:\n${JSON.stringify(data, null, 2)}`;
+    } catch (err) {
+      backupOutput.innerText = `Backup error: ${err.message}`;
+    }
+  });
+
+  // Sidebar Stats
+  async function updateSidebarStats() {
+    try {
+      const res = await fetch("/api/archive/stats");
+      const stats = await res.json();
+      const countMem = document.getElementById("statMemoriesCount");
+      const countVer = document.getElementById("statVerifiedCount");
+      if (countMem) countMem.innerText = stats.total_memories;
+      if (countVer) countVer.innerText = stats.verified_memories;
+    } catch (e) {}
+  }
+
+  // Helpers
+  function escapeHtml(str) {
+    if (!str) return "";
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function escapeAttr(str) {
+    if (!str) return "";
+    return str.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  updateSidebarStats();
+});

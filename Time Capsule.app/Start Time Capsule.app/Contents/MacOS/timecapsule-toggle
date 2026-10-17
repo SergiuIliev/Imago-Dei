@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+
+# Check if server is currently running
+if curl -s -m 1 http://127.0.0.1:7860/api/health > /dev/null 2>&1 || lsof -ti tcp:7860 -sTCP:LISTEN > /dev/null 2>&1; then
+  echo "Server is running. Stopping..."
+  bash "/Users/Sergiu/AI/Time_Capsule/scripts/stop_server.sh"
+else
+  echo "Server is stopped. Starting and opening site..."
+  bash "/Users/Sergiu/AI/Time_Capsule/scripts/start_server.sh"
+fi

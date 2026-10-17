@@ -1,0 +1,115 @@
+{
+  "synthetic_memories": [
+    {
+      "id": "syn-mem-001",
+      "content": "[SYNTHETIC TEST FIXTURE] Evaluated Python async event loops under synthetic benchmark load in a 2016 sandbox. Concluded that asynchronous I/O requires rigorous non-blocking primitives.",
+      "summary": "Synthetic test fixture evaluating async event loops in 2016 sandbox.",
+      "category": "career",
+      "date_occurred": "2016-04-12",
+      "verification_status": "synthetic_fixture",
+      "confidence": 0.99,
+      "emotional_tone": "serious",
+      "tags": ["synthetic_fixture", "async", "benchmarking"]
+    },
+    {
+      "id": "syn-mem-002",
+      "content": "[SYNTHETIC TEST FIXTURE] In early 2017, experimented with rapid frontend web prototyping and monolithic single-server deployments. Believed speed of shipping outweighed architectural purity.",
+      "summary": "Early twenties philosophy on shipping fast with monolithic web apps.",
+      "category": "reflection",
+      "date_occurred": "2017-09-20",
+      "verification_status": "synthetic_fixture",
+      "confidence": 0.95,
+      "emotional_tone": "lively",
+      "tags": ["synthetic_fixture", "early_20s", "web_development"]
+    },
+    {
+      "id": "syn-mem-003",
+      "content": "[SYNTHETIC TEST FIXTURE] During 2020, deployed extensive home server automation and sensor networks. Realized that physical hardware interfaces require defensive state-machine validation.",
+      "summary": "2020 home server automation and defensive state machine validation.",
+      "category": "lifestyle",
+      "date_occurred": "2020-11-05",
+      "verification_status": "synthetic_fixture",
+      "confidence": 0.98,
+      "emotional_tone": "reflective",
+      "tags": ["synthetic_fixture", "automation", "smart_home"]
+    },
+    {
+      "id": "syn-mem-004",
+      "content": "[SYNTHETIC TEST FIXTURE] In 2024, established strict private local AI architecture on Apple Silicon M4. Prioritized zero external telemetry, cryptographic provenance, and modular replaceable models.",
+      "summary": "2024 local AI sovereignty and privacy on Apple Silicon M4.",
+      "category": "belief",
+      "date_occurred": "2024-03-15",
+      "verification_status": "synthetic_fixture",
+      "confidence": 1.0,
+      "emotional_tone": "serious",
+      "tags": ["synthetic_fixture", "local_ai", "privacy"]
+    }
+  ],
+  "temporal_beliefs": [
+    {
+      "id": "belief-arch-early",
+      "topic": "Architecture Design",
+      "belief_statement": "Monoliths and rapid single-file scripts are superior because speed of iteration trumps abstract modularity.",
+      "era_label": "Early 20s (2014-2018)",
+      "approx_year_start": 2014,
+      "approx_year_end": 2018,
+      "evidence_memory_ids": ["syn-mem-002"],
+      "superseded_by_id": "belief-arch-mid",
+      "supersedes_id": null,
+      "active": false,
+      "reason_for_change": "Discovered that monolithic scripts accumulate technical debt and break unpredictably under scale."
+    },
+    {
+      "id": "belief-arch-mid",
+      "topic": "Architecture Design",
+      "belief_statement": "Systems must be split into decoupled microservices with network APIs to isolate faults.",
+      "era_label": "Mid-to-Late 20s (2019-2022)",
+      "approx_year_start": 2019,
+      "approx_year_end": 2022,
+      "evidence_memory_ids": ["syn-mem-003"],
+      "superseded_by_id": "belief-arch-present",
+      "supersedes_id": "belief-arch-early",
+      "active": false,
+      "reason_for_change": "Distributed microservice networks introduced excessive networking overhead, latency, and operational fragility."
+    },
+    {
+      "id": "belief-arch-present",
+      "topic": "Architecture Design",
+      "belief_statement": "Autonomous local modules with strict in-process interfaces, zero distributed bloat, and automated red-teaming provide optimal durability.",
+      "era_label": "Present Day (2023-Present)",
+      "approx_year_start": 2023,
+      "approx_year_end": null,
+      "evidence_memory_ids": ["syn-mem-004"],
+      "superseded_by_id": null,
+      "supersedes_id": "belief-arch-mid",
+      "active": true,
+      "reason_for_change": null
+    },
+    {
+      "id": "belief-privacy-early",
+      "topic": "Data Privacy",
+      "belief_statement": "Cloud hosting is completely fine for personal tools as long as basic HTTPS is enforced.",
+      "era_label": "Early 20s (2014-2018)",
+      "approx_year_start": 2014,
+      "approx_year_end": 2018,
+      "evidence_memory_ids": [],
+      "superseded_by_id": "belief-privacy-present",
+      "supersedes_id": null,
+      "active": false,
+      "reason_for_change": "Observed rampant telemetry collection, corporate surveillance, and unpredictable cloud API shutdowns."
+    },
+    {
+      "id": "belief-privacy-present",
+      "topic": "Data Privacy",
+      "belief_statement": "Personal memories and identity must run 100% locally with zero cloud leakage, loopback binding, and cryptographic manifests.",
+      "era_label": "Present Day (2023-Present)",
+      "approx_year_start": 2023,
+      "approx_year_end": null,
+      "evidence_memory_ids": ["syn-mem-004"],
+      "superseded_by_id": null,
+      "supersedes_id": "belief-privacy-early",
+      "active": true,
+      "reason_for_change": null
+    }
+  ]
+}
