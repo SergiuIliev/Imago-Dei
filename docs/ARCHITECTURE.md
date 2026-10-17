@@ -103,15 +103,20 @@
 1. **User input:** User submits query via Web UI or REST API (`POST /api/chat`) with selected chronological era (e.g. `early_20s` or `present`).
 2. **Era resolution:** `ConversationEngine` queries `PersonalityProfile` for the target era's worldview, style notes, and default delivery parameters.
 3. **Hybrid Retrieval:** `HybridRetrievalProvider` executes simultaneous BM25 keyword matching (`memories_fts`) and dense vector similarity (`time_capsule_memories`). Results are fused via Reciprocal Rank Fusion ($k=60$) with date filtering.
-4. **Evidence Thresholding:** If top score $< 0.005$ or no documents match, `has_sufficient_evidence` is set to `False`.
-5. **Prompt Assembly:** System prompt injects:
+4. **Evidence Thresholding & Honest Uncertainty Gatekeeper:** For `has_sufficient_evidence` to evaluate to `True`, the system requires:
+   - Top dense semantic vector similarity $\ge 0.70$ (or cosine similarity $\ge 0.50$), OR
+   - Both keyword (BM25) and semantic search agree on the top candidate with composite RRF score $\ge 0.012$, AND
+   - Lexical overlap on key query content words is non-empty.
+   Weak single-keyword or ungrounded semantic drift queries strictly evaluate to `has_sufficient_evidence = False`.
+5. **Provenance & Audio Slicing:** Citations include source metadata, transcript segments, and precise on-the-fly audio slice streaming URLs (`GET /api/media/{source_id}/clip?start={start}&end={end}`).
+6. **Prompt Assembly:** System prompt injects:
    - Chronological persona constraints.
    - Relevant temporal beliefs showing historical evolution on the topic.
    - Grounded memory citations with timestamps and verification tiers.
    - Mandatory honest uncertainty directive if evidence is absent.
-6. **LLM Inference:** `OllamaLLMProvider` generates response via local loopback API using `llama3.2:3b`.
-7. **Prosody Adaptation:** `ExpressiveDeliveryController` calculates speaking rate (WPM), emotion category, pitch shift, and pause multipliers.
-8. **Optional Voice Generation:** `TTSProvider` generates a 24kHz WAV file served via `/api/audio/{filename}` for browser playback.
+7. **LLM Inference:** `OllamaLLMProvider` generates response via local loopback API using `llama3.2:3b`.
+8. **Prosody Adaptation:** `ExpressiveDeliveryController` calculates speaking rate (WPM), emotion category, pitch shift, and pause multipliers.
+9. **Optional Voice Generation:** `TTSProvider` generates a 24kHz WAV file served via `/api/audio/{filename}` for browser playback.
 
 ### 3.2 Media Ingestion Flow (When Vlogs Arrive)
 1. **Discovery:** Target directory is scanned for supported extensions (`.mp4`, `.mov`, `.mkv`, `.wav`).

@@ -41,7 +41,7 @@
     "provider": "liveportrait_stub",
     "target_fps": 25,
     "resolution": "512x512",
-    "reference_portrait_image": ""
+    "reference_portrait_image": "/Users/Sergiu/AI/Time_Capsule/data/capsule/portraits/canonical_portrait.png"
   },
   "security": {
     "local_only": true,

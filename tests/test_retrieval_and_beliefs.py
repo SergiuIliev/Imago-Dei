@@ -119,6 +119,68 @@ class TestRetrievalAndBeliefs(unittest.TestCase):
         turn = new_engine.process_turn("Hello")
         self.assertEqual(turn.text, "Alternative provider output.")
 
+    def test_honest_uncertainty_gatekeeper_out_of_domain(self):
+        """Verifies that out-of-domain queries strictly evaluate to has_sufficient_evidence = False."""
+        # Query with non-matching content
+        evidence, has_ev = self.retrieval.retrieve("What was my favorite restaurant in Tokyo in 2016?")
+        self.assertFalse(has_ev)
+
+        # Another out-of-domain query
+        evidence2, has_ev2 = self.retrieval.retrieve("Where did I go for vacation in Iceland in 2015?")
+        self.assertFalse(has_ev2)
+
+        # In-domain query with matching keyword and semantic support
+        evidence3, has_ev3 = self.retrieval.retrieve("rapid prototyping in 2016")
+        self.assertTrue(has_ev3)
+        self.assertGreaterEqual(len(evidence3), 1)
+
+    def test_audio_clip_url_binding_and_transcript_segment(self):
+        """Verifies that audio_clip_url and transcript_segment are bound into citation evidence."""
+        from core.models import MediaSource, TranscriptSegment
+
+        source_id = "test-source-42"
+        media = MediaSource(
+            id=source_id,
+            file_path="/tmp/test.wav",
+            file_hash="fakehash123",
+            file_size_bytes=1000,
+            duration_seconds=120.0
+        )
+        self.db.upsert_media(media)
+
+        seg = TranscriptSegment(
+            id="seg-1",
+            source_id=source_id,
+            start_seconds=10.0,
+            end_seconds=25.0,
+            speaker="Sergiu",
+            text="Testing audio clip binding."
+        )
+        self.db.insert_transcript_segments([seg])
+
+        m_clip = MemoryItem(
+            id="mem-clip",
+            content="Testing audio clip binding in recorded memory.",
+            summary="Audio clip memory",
+            source_id=source_id,
+            start_seconds=10.0,
+            end_seconds=25.0,
+            verification_status=VerificationStatus.PERSONAL_VERIFIED
+        )
+        self.db.add_memory(m_clip)
+        self.vector_store.add_memory_embedding(m_clip)
+
+        ev_list, has_ev = self.retrieval.retrieve("Testing audio clip binding")
+        self.assertTrue(has_ev)
+        top = ev_list[0]
+        self.assertEqual(top.memory.id, "mem-clip")
+
+        d = top.to_dict()
+        expected_url = f"/api/media/{source_id}/clip?start=10.0&end=25.0"
+        self.assertEqual(d.get("audio_clip_url"), expected_url)
+        self.assertIsNotNone(d.get("transcript_segment"))
+        self.assertEqual(d["transcript_segment"]["text"], "Testing audio clip binding.")
+
 
 if __name__ == "__main__":
     unittest.main()

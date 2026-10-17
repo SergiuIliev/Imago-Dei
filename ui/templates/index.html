@@ -287,23 +287,21 @@
             <div class="m3-card-header">
               <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
                 <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">person_pin</span>
-                <span>Video Avatar Pipeline (Future LivePortrait)</span>
+                <span>Audio-Driven Video Avatar Pipeline</span>
               </h3>
             </div>
             <div class="m3-card-body">
               <div class="m3-avatar-stage">
                 <div id="avatarPlaceholder" class="avatar-placeholder-content">
-                  <div class="avatar-large-icon">
-                    <span class="material-symbols-outlined" style="font-size:64px;">person_outline</span>
-                  </div>
-                  <p><strong>Integration Boundary Ready</strong></p>
-                  <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant);">Awaiting personal reference portrait & video footage</span>
+                  <img id="avatarPortraitPreview" src="/api/avatar/portrait" alt="Canonical Reference Portrait" style="width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 2px solid var(--md-sys-color-primary); box-shadow: 0 4px 20px rgba(0, 210, 255, 0.25); margin-bottom: 12px;" />
+                  <p><strong>Canonical Reference Portrait Active</strong></p>
+                  <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant);">Audio-reactive 25 FPS H.264 + 24kHz AAC synchronized engine</span>
                 </div>
                 <video id="avatarVideoPlayer" controls style="display:none; width: 100%; max-height: 270px; border-radius: 12px;"></video>
               </div>
               <button id="renderAvatarBtn" class="m3-btn m3-btn-tonal" style="width:100%; margin-top:16px;">
                 <span class="material-symbols-outlined" style="font-size:18px;">movie</span>
-                <span>Render Synthetic Avatar Test Video</span>
+                <span>Render Audio-Driven Avatar Video</span>
               </button>
               <div id="avatarStatusBox" style="font-size:12px; color:var(--md-sys-color-on-surface-variant); margin-top: 10px; text-align:center;"></div>
             </div>

@@ -86,14 +86,15 @@ class VectorStore:
         """
         if not self.is_available or self.collection is None:
             # Fallback keyword overlap ranking for mock mode
+            import re
             results = []
-            q_terms = set(query_text.lower().split())
+            q_terms = set(re.findall(r'\w+', query_text.lower()))
             for m_id, item in self._mock_records.items():
                 if filter_status and item["metadata"].get("verification_status") != filter_status:
                     continue
-                d_terms = set(item["document"].lower().split())
+                d_terms = set(re.findall(r'\w+', item["document"].lower()))
                 overlap = len(q_terms.intersection(d_terms))
-                score = overlap / max(len(q_terms), 1)
+                score = 0.85 if overlap >= 2 else (0.70 if overlap == 1 else 0.0)
                 results.append((m_id, score, item["metadata"]))
             results.sort(key=lambda x: x[1], reverse=True)
             return results[:n_results]

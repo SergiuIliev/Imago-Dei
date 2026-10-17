@@ -100,6 +100,31 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertIn("total_memories", data)
         self.assertIn("verified_memories", data)
 
+    def test_media_clip_streaming(self):
+        """Verifies on-the-fly vlog audio slice streaming and bounds validation."""
+        source_id = "3791e8c7-4c75-446a-82b3-641eebc98d3f"
+        # 1. Valid range stream
+        resp = self.client.get(f"/api/media/{source_id}/clip?start=244.9&end=282.9")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers["content-type"], "audio/wav")
+        self.assertGreater(len(resp.content), 1000)
+
+        # 2. Negative start
+        resp_neg = self.client.get(f"/api/media/{source_id}/clip?start=-5&end=10")
+        self.assertEqual(resp_neg.status_code, 400)
+
+        # 3. Start >= End
+        resp_inv = self.client.get(f"/api/media/{source_id}/clip?start=50&end=10")
+        self.assertEqual(resp_inv.status_code, 400)
+
+        # 4. Start exceeds duration
+        resp_ovr = self.client.get(f"/api/media/{source_id}/clip?start=9999&end=10000")
+        self.assertEqual(resp_ovr.status_code, 400)
+
+        # 5. Nonexistent source id
+        resp_nf = self.client.get("/api/media/nonexistent-id/clip?start=0&end=5")
+        self.assertEqual(resp_nf.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

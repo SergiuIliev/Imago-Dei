@@ -20,6 +20,68 @@ from memory.retrieval import HybridRetrievalProvider, RetrievedEvidence
 from providers.llm.base import LLMProvider
 
 
+import re
+
+FOLLOWUP_CUES = [
+    "why did you feel that way",
+    "why did you feel",
+    "why did you",
+    "when did that happen",
+    "when did that",
+    "tell me more about",
+    "tell me more",
+    "second point",
+    "first point",
+    "third point",
+    "can you elaborate",
+    "what do you mean",
+    "why is that",
+    "how did that happen",
+    "how did you do that",
+    "what about",
+    "what happened next",
+    "and then what",
+    "could you explain",
+    "elaborate on",
+    "expand on",
+]
+
+COREFERENCE_PRONOUNS = {"that", "it", "this", "these", "those", "there", "then", "them"}
+
+STAGE_CUES_PATTERN = re.compile(
+    r'(?:\s*[\(\*](?:smirks?|chuckles?|pauses?|laughs?|sighs?|smiles?|clears throat|giggles?|grins?|winks?|nods?|looks? [a-z]+|hesitates?|takes a breath)[^\)\*]*[\)\*]\s*)',
+    re.IGNORECASE
+)
+AI_IDENTITY_PATTERNS = [
+    re.compile(r'\bAs an AI representation(?: of Sergiu)?,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs a digital being(?: or AI)?,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs an agentic AI,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs a language model,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs an AI,?\s*', re.IGNORECASE),
+]
+
+
+def sanitize_persona_text(text: str) -> str:
+    """Eliminates theatrical stage cues, bracketed emotions, and AI self-referrals."""
+    cleaned = STAGE_CUES_PATTERN.sub(' ', text)
+    cleaned = re.sub(r'^\s*[\(\*][^\)\*]+[\)\*]\s*', '', cleaned)
+    for p in AI_IDENTITY_PATTERNS:
+        cleaned = p.sub('', cleaned)
+    cleaned = re.sub(r' +', ' ', cleaned).strip()
+    return cleaned
+
+
+def is_followup_query(query_str: str) -> bool:
+    """Detects if query contains conversational coreferences or follow-up cues."""
+    q_lower = query_str.lower().strip()
+    if any(cue in q_lower for cue in FOLLOWUP_CUES):
+        return True
+    tokens = set(re.findall(r'\b[a-zA-Z]+\b', q_lower))
+    if len(tokens) <= 8 and tokens.intersection(COREFERENCE_PRONOUNS):
+        return True
+    return False
+
+
 @dataclass
 class ConversationResponse:
     text: str
@@ -29,6 +91,7 @@ class ConversationResponse:
     has_sufficient_evidence: bool
     is_extrapolation: bool
     recommended_delivery: ExpressiveDeliveryParams
+    session_id: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -40,6 +103,7 @@ class ConversationResponse:
             "has_sufficient_evidence": self.has_sufficient_evidence,
             "is_extrapolation": self.is_extrapolation,
             "recommended_delivery": self.recommended_delivery.to_dict(),
+            "session_id": self.session_id,
             "metadata": self.metadata
         }
 
@@ -64,12 +128,13 @@ class ConversationEngine:
         query: str,
         era_id: Optional[str] = None,
         verification_filter: Optional[str] = None,
-        force_simulation: bool = False
+        force_simulation: bool = False,
+        session_id: Optional[str] = None
     ) -> ConversationResponse:
         """
-        Processes a single conversational inquiry from the user.
-        Retrieves matching evidence, matches chronological persona, queries LLM,
-        and constructs delivery instructions.
+        Processes a conversational inquiry from the user.
+        Supports multi-turn session memory, coreference query expansion,
+        temporal belief retrieval, and grounded first-person generation.
         """
         # 1. Resolve chronological snapshot
         active_era: Optional[PersonaSnapshot] = None
@@ -79,26 +144,46 @@ class ConversationEngine:
             # Default to present day
             active_era = self.personality.get_snapshot("present")
 
-        # 2. Retrieve grounded memory evidence
+        # 2. Retrieve recent session history if session_id provided
+        history: List[Dict[str, Any]] = []
+        if session_id:
+            if not self.db.get_session(session_id):
+                self.db.create_session(title=query[:60], session_id=session_id)
+            history = self.db.get_session_messages(session_id, limit=6)
+
+        # 3. Query expansion for follow-up questions / coreferences
+        retrieval_query = query
+        if session_id and history and is_followup_query(query):
+            last_user = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
+            last_assistant = next((m["content"][:150] for m in reversed(history) if m.get("role") == "assistant"), "")
+            # Combine previous context to ensure hybrid retrieval captures referenced concepts
+            if last_user:
+                retrieval_query = f"{last_user} {query}".strip()
+            elif last_assistant:
+                retrieval_query = f"{last_assistant} {query}".strip()
+
+        # 4. Retrieve grounded memory evidence
         evidence_list, has_evidence = self.retrieval.retrieve(
-            query=query,
+            query=retrieval_query,
             limit=5,
             status_filter=verification_filter,
             era_filter=active_era.time_period if active_era else None
         )
 
-        # 3. Retrieve relevant temporal beliefs
-        # Search topic keywords in beliefs
+        # 5. Retrieve relevant temporal beliefs using enhanced FTS5 matching
         matched_beliefs: List[TemporalBelief] = []
-        for word in query.split():
-            if len(word) > 3:
-                matched_beliefs.extend(self.db.get_beliefs_for_topic(word))
+        # Check full retrieval query and individual terms
+        matched_beliefs.extend(self.db.get_beliefs_for_topic(retrieval_query))
+        for word in retrieval_query.split():
+            clean_w = re.sub(r'[^a-zA-Z0-9]', '', word)
+            if len(clean_w) > 3 and clean_w.lower() not in {"what", "when", "where", "which", "about", "your", "that", "this", "from", "with", "have"}:
+                matched_beliefs.extend(self.db.get_beliefs_for_topic(clean_w))
 
         # Deduplicate matched beliefs
         unique_beliefs = {b.id: b for b in matched_beliefs}
         beliefs_list = list(unique_beliefs.values())
 
-        # 4. Format evidence texts for prompt
+        # 6. Format evidence texts for prompt
         evidence_texts = []
         for ev in evidence_list:
             citation = ev.format_citation()
@@ -112,7 +197,7 @@ class ConversationEngine:
                 status_str = "Active" if b.active else f"Superseded (Reason: {b.reason_for_change or 'Not specified'})"
                 beliefs_summary += f"- [{b.era_label}] {b.topic}: \"{b.belief_statement}\" (Status: {status_str})\n"
 
-        # 5. Build system prompt
+        # 7. Build system prompt
         system_prompt = self.personality.build_system_prompt(
             era=active_era,
             evidence_texts=evidence_texts,
@@ -120,23 +205,51 @@ class ConversationEngine:
             temporal_beliefs_summary=beliefs_summary
         )
 
-        user_prompt = f"User asks: \"{query}\""
+        # 8. Build user prompt with multi-turn conversation history
+        prompt_parts = []
+        if history:
+            prompt_parts.append("RECENT CONVERSATION HISTORY:")
+            for m in history:
+                speaker = "Sergiu" if m.get("role") == "assistant" else "User"
+                prompt_parts.append(f"{speaker}: {m.get('content', '')}")
+            prompt_parts.append("")
+
+        prompt_parts.append(f"User asks: \"{query}\"")
         if force_simulation or not has_evidence:
             if not has_evidence:
-                user_prompt += "\n[Note: Archive search returned no direct match. State honest uncertainty clearly.]"
+                prompt_parts.append("[Note: Archive search returned no direct match. State honest uncertainty clearly.]")
             else:
-                user_prompt += f"\n[Request: Simulate how you would reason about this from the perspective of {active_era.era_name if active_era else 'your past self'}. Prefix response with [SIMULATED PERSPECTIVE].]"
+                prompt_parts.append(f"[Request: Simulate how you would reason about this from the perspective of {active_era.era_name if active_era else 'your past self'}. Prefix response with [SIMULATED PERSPECTIVE].]")
 
-        # 6. Call LLM
+        user_prompt = "\n".join(prompt_parts)
+
+        # 9. Call LLM
         model_output = self.llm.generate(
             prompt=user_prompt,
             system_prompt=system_prompt,
             temperature=0.35 if has_evidence else 0.2
         )
 
-        # 7. Determine expressive voice delivery parameters
+        # Sanitize output against stage directions and AI roleplay disclaimers
+        model_output = sanitize_persona_text(model_output)
+
+        # 10. Persist user turn and assistant response into session memory
+        if session_id:
+            self.db.append_message(
+                session_id=session_id,
+                role="user",
+                content=query
+            )
+            evidence_dicts = [e.to_dict() for e in evidence_list]
+            self.db.append_message(
+                session_id=session_id,
+                role="assistant",
+                content=model_output,
+                evidence=evidence_dicts
+            )
+
+        # 11. Determine expressive voice delivery parameters
         base_delivery = active_era.default_delivery if active_era else ExpressiveDeliveryParams()
-        # Modulate emotion based on tone of response
         response_lower = model_output.lower()
         recommended_delivery = ExpressiveDeliveryParams(
             emotion=base_delivery.emotion,
@@ -166,8 +279,12 @@ class ConversationEngine:
             has_sufficient_evidence=has_evidence,
             is_extrapolation=is_extrapolation,
             recommended_delivery=recommended_delivery,
+            session_id=session_id,
             metadata={
                 "model_info": self.llm.get_model_info(),
-                "query": query
+                "query": query,
+                "retrieval_query": retrieval_query if session_id else query,
+                "history_length": len(history)
             }
         )
+

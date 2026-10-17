@@ -232,3 +232,39 @@ class PersonaSnapshot:
         if isinstance(data_copy.get('default_delivery'), dict):
             data_copy['default_delivery'] = ExpressiveDeliveryParams.from_dict(data_copy['default_delivery'])
         return cls(**data_copy)
+
+
+@dataclass
+class ChatSession:
+    """A conversational session containing multi-turn dialogue history."""
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    title: str = "New Conversation"
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ChatSession:
+        return cls(**data)
+
+
+@dataclass
+class ChatMessage:
+    """An individual conversational turn within a session."""
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str = ""
+    role: str = "user"  # "user" or "assistant"
+    content: str = ""
+    evidence_json: Optional[str] = None
+    audio_url: Optional[str] = None
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ChatMessage:
+        return cls(**data)
+

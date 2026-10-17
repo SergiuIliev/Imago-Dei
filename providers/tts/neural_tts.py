@@ -1,19 +1,26 @@
 """
 Neural Voice Synthesis and Reference-Conditioned Voice Cloning Provider.
-Provides an extensible architecture for open-weight neural TTS (Kokoro-82M).
-Supports reference audio conditioning and custom speaker tensors (sergiu_voice.pt)
-empirically calibrated from personal vlogs, with automatic fallback to local macOS native speech.
+Provides high-fidelity flow matching TTS conditioned on Sergiu's authentic recordings (F5-TTS),
+with fast-path routing to a warm Metal MPS daemon on 127.0.0.1:7861,
+clean stage-direction sanitization, sentence-level synthesis with natural pause padding,
+and automatic fallback to Kokoro-82M neural TTS or local macOS native speech.
 """
 
 from __future__ import annotations
 import os
 import sys
+import time
+import uuid
+import json
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import soundfile as sf
+import numpy as np
 
-from core.models import ExpressiveDeliveryParams
-from core.voice import VoiceProfile, ExpressiveDeliveryController
+from core.models import ExpressiveDeliveryParams, EmotionCategory
+from core.voice import VoiceProfile, ExpressiveDeliveryController, get_reference_clip_for_emotion
 from providers.tts.base import TTSProvider
 from providers.tts.macos_tts import MacOSNativeTTSProvider
 
@@ -26,32 +33,40 @@ class NeuralTTSProvider(TTSProvider):
 
     def __init__(
         self,
-        model_name: str = "kokoro-82m",
+        model_name: str = "sergiu_authentic_f5",
         models_dir: str = "/Users/Sergiu/AI/models/tts",
         voice_profile: Optional[VoiceProfile] = None,
-        fallback_provider: Optional[TTSProvider] = None
+        fallback_provider: Optional[TTSProvider] = None,
+        delivery_controller: Optional[ExpressiveDeliveryController] = None
     ):
         self.model_name = model_name
         self.models_dir = Path(models_dir)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.profile = voice_profile or VoiceProfile()
         self.fallback = fallback_provider or MacOSNativeTTSProvider()
-        
+        self.delivery_controller = delivery_controller or ExpressiveDeliveryController(self.profile)
+
         # Pipeline instance cache
         self._pipeline = None
         self._custom_voice_tensor = None
+        self.neural_engine_ready = False
+
+    def _ensure_engine_ready(self) -> bool:
+        """Lazily initializes Kokoro neural TTS only when needed as fallback."""
+        if self._pipeline is not None:
+            return True
         self.neural_engine_ready = self._initialize_engine()
+        return self.neural_engine_ready
 
     def _initialize_engine(self) -> bool:
         """Initializes Kokoro neural TTS pipeline and loads custom voice tensor if available."""
-        # Ensure VIRTUAL_ENV is visible to subprocesses / libraries
         if "VIRTUAL_ENV" not in os.environ:
             os.environ["VIRTUAL_ENV"] = "/Users/Sergiu/AI/venv-webui"
 
         try:
             from kokoro import KPipeline
             import torch
-            
+
             # Lazy initialize pipeline
             self._pipeline = KPipeline(lang_code="a")
 
@@ -60,13 +75,31 @@ class NeuralTTSProvider(TTSProvider):
             if custom_voice_path.exists():
                 self._custom_voice_tensor = torch.load(custom_voice_path, map_location="cpu", weights_only=False)
                 self.profile.is_cloned_from_personal_media = True
-            
+
             return True
         except Exception as e:
-            print(f"[NeuralTTSProvider] Notice: Neural engine initialization deferred or unavailable: {e}")
+            print(f"[NeuralTTSProvider] Notice: Kokoro neural fallback initialization deferred: {e}")
             return False
 
+    def is_daemon_responsive(self) -> bool:
+        """Checks if the persistent F5-TTS Metal MPS daemon is ready on 127.0.0.1:7861."""
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:7861/health",
+                headers={"User-Agent": "TimeCapsule-Voice/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=0.6) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    return data.get("status") == "ready"
+        except Exception:
+            pass
+        return False
+
     def is_healthy(self) -> bool:
+        """Provider is considered healthy if daemon is ready, Kokoro is ready, or fallback is ready."""
+        if self.is_daemon_responsive():
+            return True
         if self.neural_engine_ready and self._pipeline is not None:
             return True
         return self.fallback.is_healthy()
@@ -78,9 +111,7 @@ class NeuralTTSProvider(TTSProvider):
         return voices
 
     def prepare_reference_conditioning(self, audio_paths: List[str]) -> Dict[str, Any]:
-        """
-        Validates and registers personal reference audio files for voice conditioning.
-        """
+        """Validates and registers personal reference audio files for voice conditioning."""
         valid_clips = []
         for p_str in audio_paths:
             p = Path(p_str)
@@ -96,6 +127,37 @@ class NeuralTTSProvider(TTSProvider):
             "status": "ready_for_cloning" if valid_clips else "awaiting_personal_media"
         }
 
+    def _call_daemon(
+        self,
+        text: str,
+        output_path: str,
+        speed: float,
+        ref_id: str,
+        steps: int = 8
+    ) -> bool:
+        """Sends synthesis request to warm F5-TTS daemon."""
+        try:
+            payload = json.dumps({
+                "text": text,
+                "output_path": output_path,
+                "speed": speed,
+                "ref_id": ref_id,
+                "steps": steps
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "http://127.0.0.1:7861/synthesize",
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "TimeCapsule-Voice/1.0"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    return data.get("status") == "ok" and os.path.exists(output_path) and os.path.getsize(output_path) > 1000
+        except Exception as e:
+            print(f"[NeuralTTSProvider] Notice: Daemon synthesis call failed: {e}")
+        return False
+
     def synthesize(
         self,
         text: str,
@@ -105,25 +167,110 @@ class NeuralTTSProvider(TTSProvider):
     ) -> str:
         """
         Synthesizes speech using authentic neural conditioning from Sergiu's recordings (F5-TTS),
-        with fallback to Kokoro neural synthesis or macOS native speech.
+        with fast-path routing to warm daemon on 127.0.0.1:7861, stage-direction sanitization,
+        sentence-level synthesis, and graceful fallback to Kokoro neural TTS or macOS native speech.
         """
-        # 1. Primary High-Fidelity Flow Matching with F5-TTS conditioned on Sergiu's authentic voice
+        # 1. Prosodic Preparation & Sanitization through ExpressiveDeliveryController
+        timing_info = self.delivery_controller.prepare_text_and_timing(text, delivery)
+        clean_text = timing_info["clean_text"]
+        segments = timing_info.get("segments", [])
+        has_explicit_pauses = timing_info.get("has_explicit_pauses", False)
+        ref_id = timing_info.get("reference_clip_id", "ref_02")
+        effective_speed = max(0.7, min(1.2, 0.88 * delivery.speech_rate))
+
+        # 6 steps guarantees sub-5s warm synthesis on Apple Silicon Metal MPS; 14 steps for strong emphasis
+        steps = 14 if delivery.emphasis_level == "strong" else 6
+
+        if not clean_text:
+            clean_text = timing_info.get("processed_text", text)
+
+        out_path = Path(output_file_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        use_f5 = voice_override in [None, "sergiu_authentic_f5", "sergiu_voice_cloned"]
+
+        # 2. Fast-Path: Persistent Warm Metal MPS Daemon on Port 7861
+        if use_f5 and self.is_daemon_responsive():
+            try:
+                # If text contains explicit pause hints or multi-paragraph content, do sentence-level stitching
+                should_stitch = has_explicit_pauses or (len(segments) > 1 and (len(clean_text) > 120 or '\n' in text))
+
+                if should_stitch and len(segments) > 1:
+                    audio_blocks = []
+                    sr = 24000
+                    temp_files = []
+                    success = True
+
+                    for i, seg in enumerate(segments):
+                        seg_text = seg["text"].strip()
+                        if not seg_text:
+                            continue
+                        seg_pause = seg.get("pause_after_seconds", 0.25)
+                        temp_seg_file = f"/tmp/tc_seg_{uuid.uuid4().hex[:8]}_{i}.wav"
+                        temp_files.append(temp_seg_file)
+
+                        seg_ok = self._call_daemon(
+                            text=seg_text,
+                            output_path=temp_seg_file,
+                            speed=effective_speed,
+                            ref_id=ref_id,
+                            steps=steps
+                        )
+                        if not seg_ok:
+                            success = False
+                            break
+
+                        seg_audio, file_sr = sf.read(temp_seg_file)
+                        sr = file_sr
+                        audio_blocks.append(seg_audio)
+
+                        # Clean pause padding between sentences (250-500ms silence rather than spoken hint)
+                        if i < len(segments) - 1:
+                            silence_frames = int(sr * seg_pause)
+                            audio_blocks.append(np.zeros(silence_frames, dtype=np.float32))
+
+                    for tf in temp_files:
+                        try:
+                            if os.path.exists(tf):
+                                os.unlink(tf)
+                        except Exception:
+                            pass
+
+                    if success and audio_blocks:
+                        combined_audio = np.concatenate(audio_blocks)
+                        sf.write(str(out_path), combined_audio, sr)
+                        return str(out_path)
+
+                else:
+                    # Single-sentence direct synthesis (sub-5s latency)
+                    direct_ok = self._call_daemon(
+                        text=clean_text,
+                        output_path=str(out_path),
+                        speed=effective_speed,
+                        ref_id=ref_id,
+                        steps=steps
+                    )
+                    if direct_ok:
+                        return str(out_path)
+
+            except Exception as e:
+                print(f"[NeuralTTSProvider] Notice: Daemon synthesis failed ({e}), falling back to subprocess.")
+
+        # 3. Subprocess Fallback with f5_synthesize.py
         f5_script = Path("/Users/Sergiu/AI/Time_Capsule/scripts/f5_synthesize.py")
         f5_python = Path("/Users/Sergiu/AI/venv-voice/bin/python")
 
-        use_f5 = voice_override in [None, "sergiu_authentic_f5", "sergiu_voice_cloned"]
         if f5_script.exists() and f5_python.exists() and use_f5:
             try:
                 import subprocess
-                effective_speed = max(0.7, min(1.2, 0.88 * delivery.speech_rate))
                 cmd = [
                     str(f5_python),
                     str(f5_script),
-                    "--text", text,
+                    "--text", clean_text,
                     "--output", output_file_path,
                     "--speed", str(round(effective_speed, 2)),
-                    "--ref_id", "ref_02",
-                    "--steps", "16"
+                    "--ref_id", ref_id,
+                    "--steps", str(steps)
                 ]
                 env = os.environ.copy()
                 env["PYTHONHASHSEED"] = "0"
@@ -131,48 +278,41 @@ class NeuralTTSProvider(TTSProvider):
                 if res.returncode == 0 and os.path.exists(output_file_path) and os.path.getsize(output_file_path) > 1000:
                     return output_file_path
                 else:
-                    print(f"[NeuralTTSProvider] Notice: F5-TTS returned code {res.returncode}, falling back to Kokoro: {res.stderr[:200]}")
+                    print(f"[NeuralTTSProvider] Notice: F5-TTS subprocess returned code {res.returncode}, falling back to Kokoro: {res.stderr[:200]}")
             except Exception as e:
                 print(f"[NeuralTTSProvider] F5-TTS invocation error: {e}, falling back to Kokoro.")
 
-        # 2. Kokoro Neural Engine Fallback
+        # 4. Kokoro Neural Engine Fallback
         if self.neural_engine_ready and self._pipeline is not None:
             try:
-                # Determine voice style
                 voice = self._custom_voice_tensor
                 if voice_override:
                     if voice_override.startswith("kokoro_"):
                         voice = voice_override.replace("kokoro_", "")
                     elif voice_override == "sergiu_voice_cloned" and self._custom_voice_tensor is not None:
                         voice = self._custom_voice_tensor
-                
-                if voice is None:
-                    voice = "bm_george" # Default grounded male timbre
 
-                # Map delivery speech rate and emotion presets to Kokoro speed factor
+                if voice is None:
+                    voice = "bm_george"
+
                 preset = self.profile.emotion_presets.get(delivery.emotion.value, {})
                 rate_mult = preset.get("rate_multiplier", 1.0)
-                base_speed = (self.profile.average_speaking_rate_wpm / 145.0) # ~0.835
-                effective_speed = base_speed * delivery.speech_rate * rate_mult
-                effective_speed = max(0.65, min(1.35, effective_speed))
+                base_speed = (self.profile.average_speaking_rate_wpm / 145.0)
+                eff_speed = base_speed * delivery.speech_rate * rate_mult
+                eff_speed = max(0.65, min(1.35, eff_speed))
 
-                generator = self._pipeline(text, voice=voice, speed=effective_speed)
+                generator = self._pipeline(clean_text, voice=voice, speed=eff_speed)
                 all_audio = []
                 for _, _, audio in generator:
                     all_audio.append(audio)
 
                 if all_audio:
-                    import numpy as np
                     combined_audio = np.concatenate(all_audio) if len(all_audio) > 1 else all_audio[0]
-                    
-                    out_path = Path(output_file_path)
-                    out_path.parent.mkdir(parents=True, exist_ok=True)
-                    
                     sf.write(str(out_path), combined_audio, 24000)
                     return str(out_path)
 
             except Exception as e:
-                print(f"[NeuralTTSProvider] Neural synthesis failed ({e}), falling back to MacOS native speech.")
+                print(f"[NeuralTTSProvider] Neural Kokoro fallback failed ({e}), falling back to MacOS native speech.")
 
-        # 3. macOS Native Linear PCM WAV Fallback
-        return self.fallback.synthesize(text, delivery, output_file_path, voice_override)
+        # 5. macOS Native Linear PCM WAV Fallback
+        return self.fallback.synthesize(clean_text, delivery, output_file_path, voice_override)

@@ -37,6 +37,12 @@ if ! curl -s -m 2 http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
   fi
 fi
 
+# Check F5-TTS Metal MPS Voice Daemon
+if ! curl -s -m 1 http://127.0.0.1:7861/health > /dev/null 2>&1; then
+  echo "Starting background F5-TTS Metal MPS Voice Daemon..."
+  bash "$PROJECT_ROOT/scripts/start_f5_daemon.sh" > /dev/null 2>&1 &
+fi
+
 export PYTHONPATH="$PROJECT_ROOT"
 export VIRTUAL_ENV="/Users/Sergiu/AI/venv-webui"
 $PYTHON_BIN -c "

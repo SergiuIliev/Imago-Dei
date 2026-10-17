@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -123,6 +123,12 @@ class ChatRequest(BaseModel):
     verification_filter: Optional[str] = None
     synthesize_audio: bool = False
     force_simulation: bool = False
+    session_id: Optional[str] = None
+
+
+class SessionCreateRequest(BaseModel):
+    title: Optional[str] = "New Conversation"
+
 
 
 class TTSRequest(BaseModel):
@@ -204,7 +210,8 @@ async def chat_endpoint(req: ChatRequest):
         query=req.query,
         era_id=req.era_id,
         verification_filter=req.verification_filter,
-        force_simulation=req.force_simulation
+        force_simulation=req.force_simulation,
+        session_id=req.session_id
     )
 
     audio_url = None
@@ -224,6 +231,30 @@ async def chat_endpoint(req: ChatRequest):
     result = resp.to_dict()
     result["audio_url"] = audio_url
     return result
+
+
+@app.get("/api/chat/sessions")
+async def list_chat_sessions():
+    """Lists all active and historical chat sessions."""
+    return db.list_sessions()
+
+
+@app.post("/api/chat/sessions")
+async def create_chat_session(req: SessionCreateRequest = SessionCreateRequest()):
+    """Creates a new conversational session."""
+    sid = db.create_session(title=req.title or "New Conversation")
+    return {"session_id": sid, "title": req.title}
+
+
+@app.get("/api/chat/sessions/{session_id}")
+async def get_chat_session_details(session_id: str):
+    """Retrieves session metadata and conversation history."""
+    sess = db.get_session(session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    messages = db.get_session_messages(session_id, limit=50)
+    return {"session": sess, "messages": messages}
+
 
 
 @app.post("/api/tts/synthesize")
@@ -333,6 +364,81 @@ async def list_media():
     return [m.to_dict() for m in media_list]
 
 
+@app.get("/api/media/{source_id}/clip")
+async def get_media_clip(source_id: str, start: float, end: float):
+    """
+    Streams a sliced WAV audio clip on-the-fly from the local audio cache.
+    Works 100% locally from the internal APFS cache with /Volumes/SSD unmounted.
+    """
+    # Bounds validation
+    if start < 0:
+        raise HTTPException(status_code=400, detail="Start timestamp must be non-negative (start >= 0).")
+    if end <= start:
+        raise HTTPException(status_code=400, detail="End timestamp must be strictly greater than start (start < end).")
+
+    # 1. Resolve local audio file path from cache or database metadata
+    audio_path = Path(config.storage.audio_output_dir) / f"{source_id}.wav"
+    if not audio_path.exists():
+        audio_path = Path(config.storage.data_dir) / "audio_cache" / f"{source_id}.wav"
+
+    if not audio_path.exists():
+        media_src = db.get_media_by_id(source_id)
+        if media_src and media_src.metadata:
+            local_path = media_src.metadata.get("local_audio_path")
+            if local_path and os.path.exists(local_path):
+                audio_path = Path(local_path)
+
+    if not audio_path.exists():
+        raise HTTPException(status_code=404, detail=f"Audio cache file for source_id '{source_id}' not found.")
+
+    # 2. Slice audio segment using soundfile
+    try:
+        import soundfile as sf
+        import io
+
+        with sf.SoundFile(str(audio_path)) as sf_file:
+            sr = sf_file.samplerate
+            total_frames = len(sf_file)
+            duration = total_frames / sr
+
+            if start >= duration:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Start timestamp ({start:.2f}s) exceeds audio duration ({duration:.2f}s)."
+                )
+
+            if end > duration + 1.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"End timestamp ({end:.2f}s) exceeds audio duration ({duration:.2f}s)."
+                )
+            clamped_end = min(end, duration)
+
+            start_frame = max(0, int(start * sr))
+            num_frames = max(1, int((clamped_end - start) * sr))
+
+            sf_file.seek(start_frame)
+            slice_data = sf_file.read(num_frames)
+
+            buf = io.BytesIO()
+            sf.write(buf, slice_data, sr, format="WAV")
+            wav_bytes = buf.getvalue()
+
+        return Response(
+            content=wav_bytes,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f'inline; filename="{source_id}_{start:.1f}_{end:.1f}.wav"',
+                "Content-Length": str(len(wav_bytes)),
+                "Accept-Ranges": "bytes"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error slicing audio clip: {str(e)}")
+
+
 @app.post("/api/ingestion/run")
 async def run_ingestion(req: IngestionRequest):
     """Triggers ingestion pipeline for a target folder or synthetic fixture."""
@@ -341,13 +447,25 @@ async def run_ingestion(req: IngestionRequest):
 
 
 @app.post("/api/avatar/render")
-async def create_avatar_render(audio_filename: str = Form(...)):
-    """Enqueues an audio-driven avatar render job."""
-    audio_path = os.path.join(config.storage.audio_output_dir, audio_filename)
-    if not os.path.exists(audio_path):
+async def create_avatar_render(
+    audio_filename: str = Form(...),
+    reference_portrait: Optional[str] = Form(None)
+):
+    """Enqueues an audio-driven avatar render job with synchronized H.264+AAC muxing."""
+    candidate_paths = [
+        os.path.join(config.storage.audio_output_dir, audio_filename),
+        os.path.join(config.storage.data_dir, "audio_cache", audio_filename),
+        os.path.join(config.storage.data_dir, "audio_output", audio_filename),
+        audio_filename
+    ]
+    audio_path = next((p for p in candidate_paths if os.path.exists(p)), None)
+    if not audio_path:
         raise HTTPException(status_code=404, detail="Source audio file not found")
 
-    job = avatar_provider.create_render_job(audio_path=audio_path)
+    job = avatar_provider.create_render_job(
+        audio_path=audio_path,
+        reference_portrait=reference_portrait
+    )
     return job.to_dict()
 
 
@@ -367,6 +485,15 @@ async def serve_avatar_video(filename: str):
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
     return FileResponse(str(video_path), media_type="video/mp4")
+
+
+@app.get("/api/avatar/portrait")
+async def serve_avatar_portrait():
+    """Serves the canonical reference portrait image."""
+    portrait_path = avatar_provider.resolve_reference_portrait()
+    if not os.path.exists(portrait_path):
+        raise HTTPException(status_code=404, detail="Reference portrait not found")
+    return FileResponse(portrait_path, media_type="image/png")
 
 
 @app.post("/api/backup/create")

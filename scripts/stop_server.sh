@@ -38,6 +38,11 @@ if [ -n "$PORT_PIDS" ]; then
   done
 fi
 
+# 3. Stop F5-TTS Voice Daemon if running
+if [ -f "$PROJECT_ROOT/scripts/stop_f5_daemon.sh" ]; then
+  bash "$PROJECT_ROOT/scripts/stop_f5_daemon.sh" 2>/dev/null || true
+fi
+
 if [ $STOPPED -eq 1 ]; then
   echo "✔ Personal AI Time Capsule server stopped successfully."
   osascript -e 'display notification "Time Capsule server has been stopped." with title "Time Capsule" subtitle "Server Stopped"' 2>/dev/null || true

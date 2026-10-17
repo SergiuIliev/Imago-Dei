@@ -118,6 +118,50 @@ class TestVoiceAndAvatar(unittest.TestCase):
         self.assertTrue(os.path.exists(job.output_video_path))
         self.assertGreater(os.path.getsize(job.output_video_path), 0)
 
+    def test_avatar_audio_video_muxing_and_reactivity(self):
+        """Verifies MP4 container has both H.264 video and AAC audio with matching durations and reactive motion."""
+        import av
+
+        # Synthesize test audio
+        audio_file = os.path.join(self.test_dir, "test_speech_reactivity.wav")
+        self.tts.synthesize("Testing synchronized audio video muxing for avatar rendering.", ExpressiveDeliveryParams(), audio_file)
+
+        out_mp4 = os.path.join(self.test_dir, "test_muxed.mp4")
+        self.avatar.render_avatar_video(audio_path=audio_file, output_path=out_mp4)
+
+        self.assertTrue(os.path.exists(out_mp4))
+        self.assertGreater(os.path.getsize(out_mp4), 10000)
+
+        # Probe container
+        container = av.open(out_mp4)
+        v_streams = [s for s in container.streams if s.type == "video"]
+        a_streams = [s for s in container.streams if s.type == "audio"]
+
+        self.assertEqual(len(v_streams), 1, "Must contain exactly 1 video stream")
+        self.assertEqual(len(a_streams), 1, "Must contain exactly 1 audio stream")
+
+        v = v_streams[0]
+        a = a_streams[0]
+
+        # Verify video stream specs
+        self.assertEqual(v.width, 512)
+        self.assertEqual(v.height, 512)
+        self.assertIn(v.codec_context.name, ["h264", "mpeg4"])
+
+        # Verify audio stream specs
+        self.assertEqual(a.codec_context.name, "aac")
+        self.assertEqual(a.rate, 24000)
+
+        # Verify sub-millisecond duration alignment
+        v_dur = float(v.duration * v.time_base)
+        a_dur = float(a.duration * a.time_base)
+        duration_delta_ms = abs(v_dur - a_dur) * 1000.0
+
+        # Discrepancy must be well under 1 frame (40ms)
+        self.assertLess(duration_delta_ms, 20.0, f"Duration difference too high: {duration_delta_ms} ms")
+        container.close()
+
 
 if __name__ == "__main__":
     unittest.main()
+

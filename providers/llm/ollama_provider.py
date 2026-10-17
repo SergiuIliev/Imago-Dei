@@ -13,6 +13,31 @@ from core.config import LLMConfig
 from providers.llm.base import LLMProvider
 
 
+import re
+
+STAGE_CUES_PATTERN = re.compile(
+    r'(?:\s*[\(\*](?:smirks?|chuckles?|pauses?|laughs?|sighs?|smiles?|clears throat|giggles?|grins?|winks?|nods?|looks? [a-z]+|hesitates?|takes a breath)[^\)\*]*[\)\*]\s*)',
+    re.IGNORECASE
+)
+AI_IDENTITY_PATTERNS = [
+    re.compile(r'\bAs an AI representation(?: of Sergiu)?,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs a digital being(?: or AI)?,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs an agentic AI,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs a language model,?\s*', re.IGNORECASE),
+    re.compile(r'\bAs an AI,?\s*', re.IGNORECASE),
+]
+
+
+def clean_acting_cues(text: str) -> str:
+    """Removes parenthetical/asterisk acting cues and AI self-referrals."""
+    cleaned = STAGE_CUES_PATTERN.sub(' ', text)
+    cleaned = re.sub(r'^\s*[\(\*][^\)\*]+[\)\*]\s*', '', cleaned)
+    for p in AI_IDENTITY_PATTERNS:
+        cleaned = p.sub('', cleaned)
+    cleaned = re.sub(r' +', ' ', cleaned).strip()
+    return cleaned
+
+
 class OllamaLLMProvider(LLMProvider):
     """Local inference provider communicating with Ollama over loopback 127.0.0.1."""
 
@@ -71,6 +96,21 @@ class OllamaLLMProvider(LLMProvider):
         if self.fallback_model and self.fallback_model != self.model_name:
             models_to_try.append(self.fallback_model)
 
+        stop_tokens = [
+            "<|eot_id|>",
+            "<|start_header_id|>",
+            "<|end_header_id|>",
+            "(smirks)",
+            "(chuckles)",
+            "(pauses",
+            "(sighs)",
+            "(laughs)",
+            "*smiles*",
+            "*chuckles*",
+            "*sighs*",
+            "*pauses*"
+        ]
+
         last_error = None
         for model in models_to_try:
             try:
@@ -80,7 +120,8 @@ class OllamaLLMProvider(LLMProvider):
                     "stream": False,
                     "options": {
                         "temperature": temp,
-                        "num_predict": max_tokens
+                        "num_predict": max_tokens,
+                        "stop": stop_tokens
                     }
                 }
                 if system_prompt:
@@ -97,9 +138,10 @@ class OllamaLLMProvider(LLMProvider):
                     res_json = json.loads(resp.read().decode("utf-8"))
                     response_text = res_json.get("response", "").strip()
                     if response_text:
-                        return response_text
+                        return clean_acting_cues(response_text)
             except Exception as e:
                 last_error = e
                 continue
 
         raise RuntimeError(f"Ollama inference failed across models {models_to_try}: {last_error}")
+
