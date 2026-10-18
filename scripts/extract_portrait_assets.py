@@ -324,10 +324,23 @@ def extract_face_from_image(image_path: Path | str, output_path: Path | str) -> 
 
 
 def find_candidate_media() -> Optional[Path]:
-    """Scans local vlog and storage paths for video/image assets."""
+    """Scans local vlog, portrait, and website storage paths for video/image assets."""
+    # Direct high-priority personal portraits of Sergiu
+    direct_candidates = [
+        PORTRAITS_DIR / "sergiu_framed_portrait.png",
+        Path("/Users/Sergiu/Library/CloudStorage/GoogleDrive-sergiu.iliev@sj-webdesign.com/My Drive/Shared/Apps/All AI agents/projects/websites/iliev.us/images/google_profile.jpg"),
+        PORTRAITS_DIR / "sergiu_macos_profile.jpg",
+        PORTRAITS_DIR / "sergiu_real_portrait.png",
+    ]
+    for p in direct_candidates:
+        if p.exists() and p.is_file() and p.stat().st_size > 1000:
+            return p
+
     search_dirs = [
         PROJECT_ROOT / "vlogs",
         Path("/Volumes/SSD/Photography/_Speak_Project"),
+        PORTRAITS_DIR,
+        Path("/Users/Sergiu/Library/CloudStorage/GoogleDrive-sergiu.iliev@sj-webdesign.com/My Drive/Shared/Apps/All AI agents/projects/websites/iliev.us/images"),
     ]
     extensions = [".mp4", ".mov", ".mkv", ".png", ".jpg", ".jpeg"]
 
@@ -336,7 +349,7 @@ def find_candidate_media() -> Optional[Path]:
             for root, _, files in os.walk(d):
                 for f in files:
                     ext = Path(f).suffix.lower()
-                    if ext in extensions:
+                    if ext in extensions and not f.startswith("default_portrait"):
                         fp = Path(root) / f
                         if fp.is_file() and fp.stat().st_size > 1000:
                             return fp
