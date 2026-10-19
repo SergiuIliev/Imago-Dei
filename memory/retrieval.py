@@ -157,7 +157,8 @@ class HybridRetrievalProvider:
         fts_weight: float = 0.5,
         vector_weight: float = 0.5,
         min_evidence_threshold: float = 0.012,
-        min_semantic_similarity: float = 0.70
+        min_semantic_similarity: float = 0.70,
+        jev_engine: Optional[Any] = None
     ):
         self.db = db
         self.vector_store = vector_store
@@ -166,6 +167,7 @@ class HybridRetrievalProvider:
         self.vector_weight = vector_weight
         self.min_evidence_threshold = min_evidence_threshold
         self.min_semantic_similarity = min_semantic_similarity
+        self.jev_engine = jev_engine
 
     def _matches_era(self, date_occurred: Optional[str], era_filter: Optional[str]) -> bool:
         if not era_filter:
@@ -273,6 +275,23 @@ class HybridRetrievalProvider:
         is_hybrid_agreement = agrees_in_both and (top_score >= self.min_evidence_threshold)
 
         has_sufficient_evidence = bool(ranked_candidates) and (is_high_semantic or is_hybrid_agreement) and has_overlap
+
+        # Step 3.3: Fast Noul check on top retrieved chunk if Jev engine is available
+        if has_sufficient_evidence and self.jev_engine:
+            try:
+                is_avail = not hasattr(self.jev_engine, "is_available") or self.jev_engine.is_available()
+                if is_avail:
+                    top_content = f"{top_mem.summary or ''} {top_mem.content or ''}".strip()
+                    noul_res = self.jev_engine.Noul(
+                        instructions="Does this memory excerpt contain actual relevance or evidence to help answer the user query?",
+                        context=f"Query: {query}\nMemory Excerpt: {top_content}"
+                    )
+                    noul_val = getattr(noul_res, "noul", noul_res.get("noul", 1.0))
+                    if noul_val < 0.5:
+                        has_sufficient_evidence = False
+            except Exception:
+                # Graceful fallback to deterministic threshold
+                pass
 
         evidence_list: List[RetrievedEvidence] = []
         for mem_id, score in ranked_candidates:

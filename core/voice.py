@@ -32,6 +32,65 @@ def get_reference_clip_for_emotion(emotion: Union[EmotionCategory, str]) -> str:
     return EMOTION_REFERENCE_MAP.get(key, "ref_02")
 
 
+EMOTION_CRITERIA: Dict[str, str] = {
+    EmotionCategory.REFLECTIVE.value: "Contemplative, philosophical reflection, life lessons, long-term compounding vision",
+    EmotionCategory.HUMOROUS.value: "Playful, humorous, witty, self-deprecating, amused, or smiling tone",
+    EmotionCategory.LIVELY.value: "Lively, enthusiastic, high energy, fast cadence, dynamic articulation",
+    EmotionCategory.CURIOUS.value: "Inquisitive, intrigued, exploring an interesting observation or puzzle",
+    EmotionCategory.SERIOUS.value: "Grounded, resolute determination, engineering discipline, failure and resilience",
+    EmotionCategory.MELANCHOLIC.value: "Subdued, quiet, low-pitch, somber, vulnerable, or nostalgic reflection",
+    EmotionCategory.NEUTRAL.value: "Calm, objective, factual exposition, steady informational pacing",
+}
+
+
+def select_emotion_and_reference_jev(
+    text: str,
+    jev_engine: Optional[Any] = None
+) -> Tuple[EmotionCategory, str, Dict[str, Any]]:
+    """
+    Selects the optimal EmotionCategory and reference clip using Jev Choice primitive.
+    Falls back cleanly to get_reference_clip_for_emotion and heuristic detection if Jev engine is unavailable.
+    """
+    if jev_engine is not None:
+        try:
+            is_avail = not hasattr(jev_engine, "is_available") or jev_engine.is_available()
+            if is_avail:
+                choice_res = jev_engine.Choice(
+                    instructions="Select the most appropriate emotional tone and vocal delivery for this spoken text.",
+                    criteria=EMOTION_CRITERIA,
+                    context=text
+                )
+                chosen_key = choice_res.get("choice", EmotionCategory.NEUTRAL.value)
+                try:
+                    category = EmotionCategory(chosen_key)
+                except ValueError:
+                    category = EmotionCategory.NEUTRAL
+                clip_id = EMOTION_REFERENCE_MAP.get(category.value, "ref_02")
+                return (category, clip_id, dict(choice_res))
+        except Exception:
+            pass
+
+    # Heuristic fallback
+    text_lower = text.lower()
+    if "laugh" in text_lower or "funny" in text_lower or "joke" in text_lower:
+        cat = EmotionCategory.HUMOROUS
+    elif "curious" in text_lower or "wonder" in text_lower or "interesting" in text_lower:
+        cat = EmotionCategory.CURIOUS
+    elif "fail" in text_lower or "resilience" in text_lower or "discipline" in text_lower or "focus" in text_lower:
+        cat = EmotionCategory.SERIOUS
+    elif "remember" in text_lower or "vision" in text_lower or "compounding" in text_lower or "reflect" in text_lower:
+        cat = EmotionCategory.REFLECTIVE
+    elif "excited" in text_lower or "great" in text_lower or "awesome" in text_lower:
+        cat = EmotionCategory.LIVELY
+    elif "sad" in text_lower or "difficult" in text_lower or "hard" in text_lower:
+        cat = EmotionCategory.MELANCHOLIC
+    else:
+        cat = EmotionCategory.NEUTRAL
+
+    clip_id = get_reference_clip_for_emotion(cat)
+    return (cat, clip_id, {"choice": cat.value, "confidence": 0.85, "fallback": True})
+
+
 def sanitize_spoken_text(
     text: str,
     pause_multiplier: float = 1.0

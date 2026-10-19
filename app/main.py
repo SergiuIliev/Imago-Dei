@@ -38,6 +38,7 @@ from memory.backup import BackupManager
 from core.personality import PersonalityProfile
 from core.conversation import ConversationEngine
 from core.voice import ExpressiveDeliveryController, VoiceProfile
+from core.jev_engine import LocalJevEngine, DualModelVerifier, pick_best_two_models
 from providers.llm.ollama_provider import OllamaLLMProvider
 from providers.llm.mock_provider import MockLLMProvider
 from providers.tts.macos_tts import MacOSNativeTTSProvider
@@ -81,8 +82,27 @@ if config.llm.provider == "ollama":
 else:
     llm = MockLLMProvider()
 
+jev_verifier = None
+if getattr(config.llm, "enable_jev_verification", True):
+    primary_m, critic_m = pick_best_two_models(
+        ollama_endpoint=config.llm.endpoint,
+        mlx_endpoint=config.llm.mlx_endpoint
+    )
+    critic_engine = LocalJevEngine(
+        model_name=critic_m,
+        endpoint=config.llm.endpoint,
+        mlx_endpoint=config.llm.mlx_endpoint,
+        llm_provider=llm if isinstance(llm, MockLLMProvider) else None
+    )
+    jev_verifier = DualModelVerifier(
+        critic_engine=critic_engine,
+        primary_model=primary_m,
+        critic_model=critic_m
+    )
+    retrieval.jev_engine = critic_engine
+
 personality = PersonalityProfile()
-conversation_engine = ConversationEngine(retrieval, db, llm, personality)
+conversation_engine = ConversationEngine(retrieval, db, llm, personality, jev_verifier=jev_verifier)
 
 # Voice & TTS Provider
 delivery_controller = ExpressiveDeliveryController()

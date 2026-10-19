@@ -18,6 +18,8 @@ from core.personality import PersonalityProfile
 from memory.database import DatabaseManager
 from memory.retrieval import HybridRetrievalProvider, RetrievedEvidence
 from providers.llm.base import LLMProvider
+from core.jev_engine import DualModelVerifier
+from core.voice import select_emotion_and_reference_jev
 
 
 import re
@@ -116,12 +118,14 @@ class ConversationEngine:
         retrieval_provider: HybridRetrievalProvider,
         db: DatabaseManager,
         llm_provider: LLMProvider,
-        personality_profile: Optional[PersonalityProfile] = None
+        personality_profile: Optional[PersonalityProfile] = None,
+        jev_verifier: Optional[DualModelVerifier] = None
     ):
         self.retrieval = retrieval_provider
         self.db = db
         self.llm = llm_provider
         self.personality = personality_profile or PersonalityProfile()
+        self.jev_verifier = jev_verifier
 
     def process_turn(
         self,
@@ -223,7 +227,7 @@ class ConversationEngine:
 
         user_prompt = "\n".join(prompt_parts)
 
-        # 9. Call LLM
+        # 9. Call LLM (Model 1)
         model_output = self.llm.generate(
             prompt=user_prompt,
             system_prompt=system_prompt,
@@ -232,6 +236,21 @@ class ConversationEngine:
 
         # Sanitize output against stage directions and AI roleplay disclaimers
         model_output = sanitize_persona_text(model_output)
+
+        # 9b. Dual-Model Cross-Verification (Model 2 Critic)
+        jev_telemetry = None
+        if self.jev_verifier:
+            try:
+                model_output, jev_telemetry = self.jev_verifier.verify_and_refine_response(
+                    query=query,
+                    evidence_texts=evidence_texts,
+                    beliefs_summary=beliefs_summary,
+                    has_sufficient_evidence=has_evidence,
+                    draft_response=model_output
+                )
+                model_output = sanitize_persona_text(model_output)
+            except Exception:
+                pass
 
         # 10. Persist user turn and assistant response into session memory
         if session_id:
@@ -250,9 +269,11 @@ class ConversationEngine:
 
         # 11. Determine expressive voice delivery parameters
         base_delivery = active_era.default_delivery if active_era else ExpressiveDeliveryParams()
-        response_lower = model_output.lower()
+        jev_engine = self.jev_verifier.critic_engine if self.jev_verifier else None
+        detected_emotion, ref_clip, _ = select_emotion_and_reference_jev(model_output, jev_engine)
+
         recommended_delivery = ExpressiveDeliveryParams(
-            emotion=base_delivery.emotion,
+            emotion=detected_emotion,
             intensity=base_delivery.intensity,
             speech_rate=base_delivery.speech_rate,
             pitch_shift=base_delivery.pitch_shift,
@@ -263,13 +284,17 @@ class ConversationEngine:
             recommended_delivery.emotion = EmotionCategory.REFLECTIVE
             recommended_delivery.speech_rate = 0.92
             recommended_delivery.pause_duration_multiplier = 1.25
-        elif "laugh" in response_lower or "funny" in response_lower:
-            recommended_delivery.emotion = EmotionCategory.HUMOROUS
-            recommended_delivery.speech_rate = 1.05
-        elif "curious" in response_lower or "wonder" in response_lower:
-            recommended_delivery.emotion = EmotionCategory.CURIOUS
 
         is_extrapolation = force_simulation or ("[SIMULATED PERSPECTIVE]" in model_output)
+
+        metadata = {
+            "model_info": self.llm.get_model_info(),
+            "query": query,
+            "retrieval_query": retrieval_query if session_id else query,
+            "history_length": len(history)
+        }
+        if jev_telemetry:
+            metadata["jev_verification"] = jev_telemetry
 
         return ConversationResponse(
             text=model_output,
@@ -280,11 +305,6 @@ class ConversationEngine:
             is_extrapolation=is_extrapolation,
             recommended_delivery=recommended_delivery,
             session_id=session_id,
-            metadata={
-                "model_info": self.llm.get_model_info(),
-                "query": query,
-                "retrieval_query": retrieval_query if session_id else query,
-                "history_length": len(history)
-            }
+            metadata=metadata
         )
 

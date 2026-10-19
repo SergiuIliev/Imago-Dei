@@ -29,6 +29,9 @@ class LLMConfig:
     endpoint: str = "http://127.0.0.1:11434"
     model_name: str = "sergiu-time-capsule" # Fine-tuned autobiographical Ollama model
     fallback_model: str = "llama3.2:3b"
+    critic_model: str = "qwen3:4b-heretic"
+    mlx_endpoint: str = "http://127.0.0.1:8081"
+    enable_jev_verification: bool = True
     temperature: float = 0.35
     context_window: int = 8192
     timeout_seconds: float = 45.0
@@ -93,19 +96,26 @@ class CapsuleConfig:
     def from_dict(cls, data: Dict[str, Any]) -> CapsuleConfig:
         config = cls()
         if "storage" in data:
-            config.storage = StorageConfig(**data["storage"])
+            s_keys = {f for f in StorageConfig.__dataclass_fields__}
+            config.storage = StorageConfig(**{k: v for k, v in data["storage"].items() if k in s_keys})
         if "llm" in data:
-            config.llm = LLMConfig(**data["llm"])
+            l_keys = {f for f in LLMConfig.__dataclass_fields__}
+            config.llm = LLMConfig(**{k: v for k, v in data["llm"].items() if k in l_keys})
         if "embedding" in data:
-            config.embedding = EmbeddingConfig(**data["embedding"])
+            e_keys = {f for f in EmbeddingConfig.__dataclass_fields__}
+            config.embedding = EmbeddingConfig(**{k: v for k, v in data["embedding"].items() if k in e_keys})
         if "asr" in data:
-            config.asr = ASRConfig(**data["asr"])
+            a_keys = {f for f in ASRConfig.__dataclass_fields__}
+            config.asr = ASRConfig(**{k: v for k, v in data["asr"].items() if k in a_keys})
         if "tts" in data:
-            config.tts = TTSConfig(**data["tts"])
+            t_keys = {f for f in TTSConfig.__dataclass_fields__}
+            config.tts = TTSConfig(**{k: v for k, v in data["tts"].items() if k in t_keys})
         if "avatar" in data:
-            config.avatar = AvatarConfig(**data["avatar"])
+            av_keys = {f for f in AvatarConfig.__dataclass_fields__}
+            config.avatar = AvatarConfig(**{k: v for k, v in data["avatar"].items() if k in av_keys})
         if "security" in data:
-            config.security = SecurityConfig(**data["security"])
+            sec_keys = {f for f in SecurityConfig.__dataclass_fields__}
+            config.security = SecurityConfig(**{k: v for k, v in data["security"].items() if k in sec_keys})
         return config
 
     def save_to_file(self, config_path: str = "/Users/Sergiu/AI/config/timecapsule/config.json"):
