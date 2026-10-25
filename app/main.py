@@ -236,7 +236,7 @@ async def get_eras():
 
 
 @app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest):
+def chat_endpoint(req: ChatRequest):
     """Processes conversational turn with grounded retrieval, citations, optional TTS, and era-aware avatar rendering."""
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
@@ -314,7 +314,7 @@ async def get_chat_session_details(session_id: str):
 
 
 @app.post("/api/tts/synthesize")
-async def synthesize_tts(req: TTSRequest):
+def synthesize_tts(req: TTSRequest):
     """Synthesizes text into 24kHz audio matching delivery parameters."""
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
@@ -351,7 +351,7 @@ async def synthesize_tts(req: TTSRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/audio/{filename}")
+@app.api_route("/api/audio/{filename}", methods=["GET", "HEAD"])
 async def serve_audio(filename: str):
     """Serves synthesized audio files from local cache."""
     file_path = Path(config.storage.audio_output_dir) / filename
@@ -469,7 +469,7 @@ async def list_media():
     return [m.to_dict() for m in media_list]
 
 
-@app.get("/api/media/{source_id}/clip")
+@app.api_route("/api/media/{source_id}/clip", methods=["GET", "HEAD"])
 async def get_media_clip(source_id: str, start: float, end: float):
     """
     Streams a sliced WAV audio clip on-the-fly from the local audio cache.

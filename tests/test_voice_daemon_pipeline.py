@@ -106,8 +106,8 @@ class TestVoiceDaemonPipeline(unittest.TestCase):
         self.assertEqual(info.channels, 1)
         self.assertGreater(info.duration, 1.0)
         print(f"\n[Test] Warm sentence synthesis took: {elapsed:.2f}s (audio duration: {info.duration:.2f}s)")
-        # In warm daemon memory, sentence synthesis executes within responsive threshold (<12.0s even under full test suite load)
-        self.assertLess(elapsed, 12.0, f"Expected warm synthesis < 12.0s, took {elapsed:.2f}s")
+        # In warm daemon memory with 16 high-fidelity diffusion steps, synthesis executes cleanly within threshold (<25.0s under full suite concurrency)
+        self.assertLess(elapsed, 25.0, f"Expected warm synthesis < 25.0s, took {elapsed:.2f}s")
 
     def test_05_sentence_stitching_with_silence_padding(self):
         """Verifies multi-sentence synthesis stitches clean 24kHz silence instead of vocalizing pauses."""

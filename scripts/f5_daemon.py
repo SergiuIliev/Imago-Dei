@@ -221,7 +221,7 @@ class F5TTSDaemonEngine:
         clean = re.sub(r'[ \t]+', ' ', clean).strip()
         return clean
 
-    def infer(self, text: str, output_path: str, speed: float = 0.95, ref_id: str = "ref_02", steps: int = 16) -> Dict[str, Any]:
+    def infer(self, text: str, output_path: str, speed: float = 1.0, ref_id: str = "ref_02", steps: int = 16) -> Dict[str, Any]:
         """Performs warm flow matching diffusion synthesis directly on Metal MPS."""
         if not self.is_ready or self.f5 is None:
             raise RuntimeError("F5-TTS engine is not ready.")
@@ -236,6 +236,13 @@ class F5TTSDaemonEngine:
 
         t0 = time.time()
         with self.lock:
+            try:
+                import torch
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+            except Exception:
+                pass
+
             wav, sr, spec = self.f5.infer(
                 ref_file=ref_file,
                 ref_text=ref_text,
@@ -245,6 +252,15 @@ class F5TTSDaemonEngine:
                 nfe_step=steps,
                 seed=random.randint(0, 4294967295)
             )
+
+            try:
+                import torch
+                import gc
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+                gc.collect()
+            except Exception:
+                pass
         elapsed = time.time() - t0
 
         if not out_p.exists() or out_p.stat().st_size < 1000:
@@ -275,7 +291,7 @@ app = FastAPI(title="F5-TTS Persistent Voice Daemon", version="1.0.0")
 class SynthesizeRequest(BaseModel):
     text: str = Field(..., description="Text string to synthesize")
     output_path: str = Field(..., description="Absolute output path for generated WAV file")
-    speed: float = Field(default=0.95, description="Speech cadence rate multiplier")
+    speed: float = Field(default=1.0, description="Speech cadence rate multiplier")
     ref_id: str = Field(default="ref_02", description="Reference clip ID or emotion name")
     steps: int = Field(default=16, description="Flow-matching diffusion ODE steps (8-32)")
 

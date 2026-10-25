@@ -177,10 +177,10 @@ class NeuralTTSProvider(TTSProvider):
         segments = timing_info.get("segments", [])
         has_explicit_pauses = timing_info.get("has_explicit_pauses", False)
         ref_id = timing_info.get("reference_clip_id", "ref_02")
-        effective_speed = max(0.7, min(1.2, 0.88 * delivery.speech_rate))
+        effective_speed = max(0.75, min(1.3, 1.0 * delivery.speech_rate))
 
-        # 6 steps guarantees sub-5s warm synthesis on Apple Silicon Metal MPS; 14 steps for strong emphasis
-        steps = 14 if delivery.emphasis_level == "strong" else 6
+        # 16 flow-matching steps guarantees smooth, natural vocoder convergence without robotic artifacts; 24 steps for strong emphasis
+        steps = 24 if delivery.emphasis_level == "strong" else 16
 
         if not clean_text:
             clean_text = timing_info.get("processed_text", text)
@@ -193,16 +193,14 @@ class NeuralTTSProvider(TTSProvider):
         # 2. Fast-Path: Persistent Warm Metal MPS Daemon on Port 7861
         if use_f5 and self.is_daemon_responsive():
             try:
-                # If text contains explicit pause hints or multi-paragraph content, do sentence-level stitching
-                should_stitch = has_explicit_pauses or (len(segments) > 1 and (len(clean_text) > 120 or '\n' in text))
-
-                if should_stitch and len(segments) > 1:
+                # If text contains explicit pause hints, do segment-level stitching (max 3 segments)
+                if has_explicit_pauses and 1 < len(segments) <= 4:
                     audio_blocks = []
                     sr = 24000
                     temp_files = []
                     success = True
 
-                    for i, seg in enumerate(segments):
+                    for i, seg in enumerate(segments[:4]):
                         seg_text = seg["text"].strip()
                         if not seg_text:
                             continue
@@ -225,8 +223,8 @@ class NeuralTTSProvider(TTSProvider):
                         sr = file_sr
                         audio_blocks.append(seg_audio)
 
-                        # Clean pause padding between sentences (250-500ms silence rather than spoken hint)
-                        if i < len(segments) - 1:
+                        # Clean pause padding between sentences
+                        if i < len(segments[:4]) - 1:
                             silence_frames = int(sr * seg_pause)
                             audio_blocks.append(np.zeros(silence_frames, dtype=np.float32))
 
@@ -243,18 +241,30 @@ class NeuralTTSProvider(TTSProvider):
                         sf.write(str(out_path), cleaned_audio, sr)
                         return str(out_path)
 
-                else:
-                    # Single-sentence direct synthesis (sub-5s latency)
-                    direct_ok = self._call_daemon(
-                        text=clean_text,
-                        output_path=str(out_path),
-                        speed=effective_speed,
-                        ref_id=ref_id,
-                        steps=steps
-                    )
-                    if direct_ok:
-                        clean_wav_file(str(out_path))
-                        return str(out_path)
+                # Direct single-pass synthesis: F5-TTS synthesizes coherent paragraphs in < 5s
+                # For long text responses, limit spoken voice to first 2-3 sentences (~350 chars) for snappy conversational UX
+                synthesis_text = clean_text
+                if len(synthesis_text) > 400:
+                    sents = timing_info.get("sentences", [])
+                    concise_sents = []
+                    curr_len = 0
+                    for s in sents:
+                        concise_sents.append(s)
+                        curr_len += len(s)
+                        if curr_len >= 250:
+                            break
+                    synthesis_text = " ".join(concise_sents) if concise_sents else clean_text[:350]
+
+                direct_ok = self._call_daemon(
+                    text=synthesis_text,
+                    output_path=str(out_path),
+                    speed=effective_speed,
+                    ref_id=ref_id,
+                    steps=steps
+                )
+                if direct_ok:
+                    clean_wav_file(str(out_path))
+                    return str(out_path)
 
             except Exception as e:
                 print(f"[NeuralTTSProvider] Notice: Daemon synthesis failed ({e}), falling back to subprocess.")

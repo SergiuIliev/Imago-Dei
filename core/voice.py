@@ -149,6 +149,15 @@ def sanitize_spoken_text(
     # 1. Clean markdown code blocks
     clean = re.sub(r'```.*?```', '', clean, flags=re.DOTALL)
 
+    # 1b. Strip standardized metadata disclaimers so voice speaks pure authentic answer
+    disclaimer_pattern = (
+        r'^(?:Memory not found\.?\s*)?'
+        r'(?:The closest memories are below\.?\s*)?'
+        r'(?:Based on fine-tuning,?\s*(?:I can provide the following answer:?|my answer is:?)\s*)'
+    )
+    clean = re.sub(disclaimer_pattern, '', clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r'^(?:Memory not found\.?\s*The closest memories are below\.?\s*)', '', clean, flags=re.IGNORECASE).strip()
+
     # 2. Strip bracketed citations / metadata ([PERSONAL_VERIFIED ...], [1], etc.)
     clean = re.sub(
         r'\[(?:PERSONAL_VERIFIED|EXTRACTED_UNVERIFIED|SYNTHETIC_FIXTURE|source:|ref:|citation:|\d+)[^\]]*\]',
