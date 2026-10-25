@@ -6,21 +6,21 @@
   <title>Personal AI Time Capsule — Sergiu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <div class="app-layout">
-    <!-- Material 3 Navigation Drawer -->
+    <!-- Minimalist Navigation Drawer -->
     <aside class="m3-navigation-drawer">
       <div class="drawer-header">
         <div class="app-logo-avatar">
-          <span class="material-symbols-outlined" style="font-size:26px;">hourglass_empty</span>
+          <span class="material-symbols-outlined" style="font-size:20px;">token</span>
         </div>
         <div class="app-titles">
           <h2>Time Capsule</h2>
-          <span class="subtitle">Personal AI Archive</span>
+          <span class="subtitle" title="&ldquo;Simplicity is complexity resolved.&rdquo; — Constantin Brâncuși">Personal AI Archive</span>
         </div>
       </div>
 
@@ -43,7 +43,7 @@
         </div>
       </div>
 
-      <!-- M3 Navigation List -->
+      <!-- Navigation Menu -->
       <nav class="m3-nav-list">
         <button class="m3-nav-item active" data-tab="conversation">
           <span class="icon-wrapper">
@@ -86,7 +86,7 @@
       <!-- Drawer Footer -->
       <div class="drawer-footer">
         <div class="m3-privacy-badge">
-          <span class="material-symbols-outlined" style="font-size:18px;">lock</span>
+          <span class="material-symbols-outlined" style="font-size:16px;">lock</span>
           <span>100% Local · Zero Telemetry</span>
         </div>
         <div class="m3-stats-row" id="sidebarStats">
@@ -98,7 +98,7 @@
 
     <!-- Main Content Surface -->
     <main class="main-surface">
-      <!-- Material 3 Top App Bar -->
+      <!-- Top App Bar -->
       <header class="m3-top-app-bar">
         <div class="title-group">
           <h1 id="pageTitle">Dialogue with My Past & Present Self</h1>
@@ -110,15 +110,15 @@
               <input type="checkbox" id="voiceAutoPlay">
               <span class="m3-switch-track"><span class="m3-switch-thumb"></span></span>
             </span>
-            <span>Auto-synthesize Voice</span>
+            <span>Auto-speak</span>
           </label>
           <button id="clearChatBtn" class="m3-btn m3-btn-outlined" title="Clear chat conversation">
-            <span class="material-symbols-outlined" style="font-size:18px;">restart_alt</span>
-            <span>Clear Chat</span>
+            <span class="material-symbols-outlined" style="font-size:16px;">restart_alt</span>
+            <span>Clear</span>
           </button>
           <span class="m3-status-pill status-active" title="Security guarantee: loopback only">
-            <span class="material-symbols-outlined" style="font-size:16px;">shield_lock</span>
-            <span>Loopback Only</span>
+            <span class="material-symbols-outlined" style="font-size:14px;">shield_lock</span>
+            <span>Loopback</span>
           </span>
         </div>
       </header>
@@ -131,7 +131,7 @@
             <div class="m3-bubble assistant message">
               <div class="bubble-top-meta">
                 <span class="author-name">
-                  <span class="material-symbols-outlined" style="font-size:16px;">smart_toy</span>
+                  <span class="material-symbols-outlined" style="font-size:15px;">smart_toy</span>
                   <span>Sergiu (Time Capsule)</span>
                 </span>
                 <span class="m3-era-chip" id="currentEraTag">Present Day (2023-Present)</span>
@@ -149,11 +149,11 @@
 
           <div class="m3-chat-input-bar">
             <button id="micRecordBtn" class="m3-mic-fab" title="Push-to-Talk: Click to speak (local Whisper ASR)">
-              <span class="material-symbols-outlined" id="micIcon">mic</span>
+              <span class="material-symbols-outlined" id="micIcon" style="font-size:18px;">mic</span>
             </button>
-            <textarea id="chatInput" placeholder="Ask about an experience, belief, or decision (or click mic to speak)..."></textarea>
+            <textarea id="chatInput" placeholder="Ask about an experience, belief, or decision (or speak via mic)..."></textarea>
             <button id="sendMessageBtn" class="m3-send-fab" title="Send message">
-              <span class="material-symbols-outlined">send</span>
+              <span class="material-symbols-outlined" style="font-size:18px;">send</span>
             </button>
           </div>
         </div>
@@ -173,7 +173,7 @@
             <option value="synthetic_fixture">Synthetic Test Fixtures</option>
           </select>
           <div style="flex-grow:1; display:flex; justify-content:flex-end;">
-            <input type="text" id="memorySearchInput" class="m3-text-field" style="max-width:320px;" placeholder="Search memories by keyword...">
+            <input type="text" id="memorySearchInput" class="m3-text-field" style="max-width:280px;" placeholder="Search memories...">
           </div>
         </div>
 
@@ -194,13 +194,13 @@
         <div class="m3-dashboard-grid">
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600;">Personal Vlog Directory Status</h3>
-              <span class="m3-status-pill status-waiting">Awaiting Personal Vlog Path</span>
+              <h3 style="font-size:15px; font-weight:600;">Personal Vlog Directory Status</h3>
+              <span class="m3-status-pill status-waiting">Awaiting Path</span>
             </div>
             <div class="m3-card-body">
-              <p>You have not configured a personal media directory yet. The system is operating in independent foundation mode with verified test fixtures.</p>
+              <p>Operating in local foundation mode with verified reference recordings.</p>
               <div class="m3-input-group">
-                <input type="text" id="vlogPathInput" placeholder="/Users/Sergiu/Movies/Vlogs (Leave empty until ready)">
+                <input type="text" id="vlogPathInput" placeholder="/Users/Sergiu/Movies/Vlogs">
                 <button id="saveVlogPathBtn" class="m3-btn m3-btn-tonal">Save Path</button>
               </div>
             </div>
@@ -208,14 +208,14 @@
 
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600;">Synthetic Fixture Pipeline Verification</h3>
+              <h3 style="font-size:15px; font-weight:600;">Synthetic Pipeline Verification</h3>
               <span class="m3-badge m3-badge-synthetic">Regression Test</span>
             </div>
             <div class="m3-card-body">
-              <p>Pass synthetic test media through SHA-256 deduplication, PyAV demuxing, and memory indexing to verify pipeline readiness.</p>
-              <button id="runSyntheticIngestionBtn" class="m3-btn m3-btn-filled" style="margin-top:12px;">
-                <span class="material-symbols-outlined" style="font-size:18px;">play_arrow</span>
-                <span>Run Synthetic Ingestion Test</span>
+              <p>Run test media through SHA-256 deduplication, PyAV demuxing, and memory indexing.</p>
+              <button id="runSyntheticIngestionBtn" class="m3-btn m3-btn-filled" style="margin-top:10px;">
+                <span class="material-symbols-outlined" style="font-size:16px;">play_arrow</span>
+                <span>Run Ingestion Test</span>
               </button>
               <div id="ingestionOutput" class="m3-console-box">Ready.</div>
             </div>
@@ -223,7 +223,7 @@
 
           <div class="m3-card" style="grid-column: 1 / -1;">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600;">Ingested Media Inventory</h3>
+              <h3 style="font-size:15px; font-weight:600;">Ingested Media Inventory</h3>
             </div>
             <div class="m3-card-body" style="padding:0;">
               <div class="m3-table-wrapper">
@@ -253,8 +253,8 @@
           <!-- Voice Synthesizer Card -->
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
-                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">record_voice_over</span>
+              <h3 style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:18px;">record_voice_over</span>
                 <span>Expressive Voice Synthesizer</span>
               </h3>
             </div>
@@ -263,7 +263,7 @@
                 <label>Speech Text:</label>
                 <textarea id="ttsTextInput" rows="3">Looking back on what we built, every system was a stepping stone toward genuine autonomy.</textarea>
               </div>
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
                 <div class="m3-form-group">
                   <label>Emotional Tone:</label>
                   <select id="ttsEmotionSelect" class="m3-select">
@@ -276,16 +276,16 @@
                   </select>
                 </div>
                 <div class="m3-slider-group">
-                  <label>Speech Rate: <span id="rateVal" style="font-weight:600; color:var(--md-sys-color-primary);">1.0x</span></label>
+                  <label>Speech Rate: <span id="rateVal" style="font-weight:600; color:var(--text-high); font-family:var(--font-mono);">1.0x</span></label>
                   <input type="range" id="ttsRateRange" class="m3-slider" min="0.8" max="1.3" step="0.05" value="1.0">
                 </div>
               </div>
-              <button id="synthesizeBtn" class="m3-btn m3-btn-filled" style="width:100%; margin-top:8px;">
-                <span class="material-symbols-outlined" style="font-size:18px;">graphic_eq</span>
+              <button id="synthesizeBtn" class="m3-btn m3-btn-filled" style="width:100%; margin-top:6px;">
+                <span class="material-symbols-outlined" style="font-size:16px;">graphic_eq</span>
                 <span>Synthesize Expressive Audio</span>
               </button>
               <div class="audio-player-box" id="audioPlayerContainer">
-                <audio id="ttsAudioPlayer" controls style="display:none; width: 100%; margin-top: 15px;"></audio>
+                <audio id="ttsAudioPlayer" controls style="display:none; width: 100%; margin-top: 14px;"></audio>
               </div>
             </div>
           </div>
@@ -293,25 +293,25 @@
           <!-- Video Avatar Card -->
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
-                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">person_pin</span>
+              <h3 style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:18px;">person_pin</span>
                 <span>Audio-Driven Video Avatar Pipeline</span>
               </h3>
             </div>
             <div class="m3-card-body">
               <div class="m3-avatar-stage">
                 <div id="avatarPlaceholder" class="avatar-placeholder-content">
-                  <img id="avatarPortraitPreview" src="/api/avatar/portrait" alt="Canonical Reference Portrait" style="width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 2px solid var(--md-sys-color-primary); box-shadow: 0 4px 20px rgba(0, 210, 255, 0.25); margin-bottom: 12px;" />
-                  <p><strong>Canonical Reference Portrait Active</strong></p>
-                  <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant);">Audio-reactive 25 FPS H.264 + 24kHz AAC synchronized engine</span>
+                  <img id="avatarPortraitPreview" src="/api/avatar/portrait" alt="Canonical Reference Portrait" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-medium); margin-bottom: 10px;" />
+                  <p style="font-size:13px; font-weight:600; color:var(--text-high);">Canonical Reference Portrait Active</p>
+                  <span style="font-size:11px; color:var(--text-muted);">Audio-reactive 25 FPS H.264 + 24kHz AAC synchronized engine</span>
                 </div>
-                <video id="avatarVideoPlayer" controls style="display:none; width: 100%; max-height: 270px; border-radius: 12px;"></video>
+                <video id="avatarVideoPlayer" controls style="display:none; width: 100%; max-height: 240px; border-radius: 8px;"></video>
               </div>
-              <button id="renderAvatarBtn" class="m3-btn m3-btn-tonal" style="width:100%; margin-top:16px;">
-                <span class="material-symbols-outlined" style="font-size:18px;">movie</span>
+              <button id="renderAvatarBtn" class="m3-btn m3-btn-tonal" style="width:100%; margin-top:14px;">
+                <span class="material-symbols-outlined" style="font-size:16px;">movie</span>
                 <span>Render Audio-Driven Avatar Video</span>
               </button>
-              <div id="avatarStatusBox" style="font-size:12px; color:var(--md-sys-color-on-surface-variant); margin-top: 10px; text-align:center;"></div>
+              <div id="avatarStatusBox" style="font-size:11px; color:var(--text-muted); margin-top: 8px; text-align:center;"></div>
             </div>
           </div>
         </div>
@@ -322,8 +322,8 @@
         <div class="m3-dashboard-grid">
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
-                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">memory</span>
+              <h3 style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:18px;">memory</span>
                 <span>Machine & Model Runtime</span>
               </h3>
             </div>
@@ -341,15 +341,15 @@
 
           <div class="m3-card">
             <div class="m3-card-header">
-              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
-                <span class="material-symbols-outlined" style="color:var(--md-sys-color-primary);">backup</span>
+              <h3 style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:18px;">backup</span>
                 <span>Full Archive Backup & Export</span>
               </h3>
             </div>
             <div class="m3-card-body">
-              <p>Generate a self-contained, timestamped <code>.tar.gz</code> archive containing the complete SQLite database, vector embeddings, and cryptographic SHA-256 manifests.</p>
-              <button id="createBackupBtn" class="m3-btn m3-btn-filled" style="margin-top:14px;">
-                <span class="material-symbols-outlined" style="font-size:18px;">archive</span>
+              <p>Self-contained, timestamped <code>.tar.gz</code> archive containing SQLite database, vector embeddings, and SHA-256 manifests.</p>
+              <button id="createBackupBtn" class="m3-btn m3-btn-filled" style="margin-top:12px;">
+                <span class="material-symbols-outlined" style="font-size:16px;">archive</span>
                 <span>Create Full Backup Archive</span>
               </button>
               <div id="backupOutput" class="m3-console-box">No backup run in this session.</div>
@@ -360,12 +360,12 @@
     </main>
   </div>
 
-  <!-- Material 3 Memory Correction Dialog -->
+  <!-- Minimalist Memory Correction / Verification Modal Dialog -->
   <div id="correctionModal" class="m3-dialog-scrim" style="display:none;">
     <div class="m3-dialog-card">
-      <h2 style="font-size:20px; font-weight:600; color:var(--md-sys-color-on-surface);">Correct / Verify Memory</h2>
-      <p style="font-size:13px; color:var(--md-sys-color-on-surface-variant); margin-top:4px; margin-bottom:20px;">
-        Edits are preserved with an immutable audit log and automatically promoted to <code>[PERSONAL_VERIFIED]</code>.
+      <h2 style="font-size:17px; font-weight:600; color:var(--text-high);">Correct / Verify Memory</h2>
+      <p style="font-size:12px; color:var(--text-muted); margin-top:4px; margin-bottom:16px;">
+        Edits are saved to the audit log and automatically promoted to <code>[PERSONAL_VERIFIED]</code>.
       </p>
       <input type="hidden" id="modalMemoryId">
       <div class="m3-form-group">
@@ -373,8 +373,8 @@
         <textarea id="modalMemoryContent" rows="4"></textarea>
       </div>
       <div class="m3-form-group">
-        <label>Reason for Correction / Notes:</label>
-        <input type="text" id="modalCorrectionReason" placeholder="Clarifying the exact year and context...">
+        <label>Reason for Correction / Context Notes:</label>
+        <input type="text" id="modalCorrectionReason" placeholder="Clarifying the exact context or year...">
       </div>
       <div class="m3-dialog-actions">
         <button id="cancelCorrectionBtn" class="m3-btn m3-btn-text">Cancel</button>

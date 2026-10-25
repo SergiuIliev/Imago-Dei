@@ -7,6 +7,7 @@ belief timeline tracking, and full audit trail for memory corrections.
 from __future__ import annotations
 import sqlite3
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from core.models import (
@@ -109,7 +110,9 @@ CREATE TABLE IF NOT EXISTS temporal_beliefs (
     supersedes_id TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     reason_for_change TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    supporting_evidence TEXT DEFAULT '[]',
+    counter_arguments TEXT DEFAULT '[]'
 );
 
 CREATE INDEX IF NOT EXISTS idx_beliefs_topic ON temporal_beliefs(topic);
@@ -189,6 +192,18 @@ class DatabaseManager:
             cur = conn.execute("SELECT version FROM schema_migrations WHERE version = ?", (SCHEMA_VERSION,))
             if not cur.fetchone():
                 conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (SCHEMA_VERSION,))
+
+            # Schema migration check: Ensure supporting_evidence and counter_arguments exist in temporal_beliefs
+            try:
+                table_info = [r[1] for r in conn.execute("PRAGMA table_info(temporal_beliefs)").fetchall()]
+                if table_info:
+                    if "supporting_evidence" not in table_info:
+                        conn.execute("ALTER TABLE temporal_beliefs ADD COLUMN supporting_evidence TEXT DEFAULT '[]'")
+                    if "counter_arguments" not in table_info:
+                        conn.execute("ALTER TABLE temporal_beliefs ADD COLUMN counter_arguments TEXT DEFAULT '[]'")
+            except Exception:
+                pass
+
             # Sync temporal_beliefs_fts with existing beliefs if table has missing entries
             try:
                 conn.execute("""
@@ -412,6 +427,26 @@ class DatabaseManager:
             conn.commit()
         return True
 
+    def verify_memory(self, memory_id: str) -> bool:
+        """Promotes an unverified memory directly to PERSONAL_VERIFIED status."""
+        now = datetime.utcnow().isoformat()
+        with self.get_connection() as conn:
+            mem_row = conn.execute("SELECT id FROM memories WHERE id = ?", (memory_id,)).fetchone()
+            if not mem_row:
+                return False
+            conn.execute("""
+                UPDATE memories SET
+                    verification_status = ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (
+                VerificationStatus.PERSONAL_VERIFIED.value,
+                now,
+                memory_id
+            ))
+            conn.commit()
+        return True
+
     def get_corrections(self, memory_id: str) -> List[MemoryCorrection]:
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM memory_corrections WHERE memory_id = ? ORDER BY created_at DESC", (memory_id,)).fetchall()
@@ -483,17 +518,25 @@ class DatabaseManager:
 
     def add_belief(self, belief: TemporalBelief) -> str:
         with self.get_connection() as conn:
+            supporting_json = json.dumps(
+                [e.to_dict() if hasattr(e, 'to_dict') else e for e in (belief.supporting_evidence or [])]
+            )
+            counter_json = json.dumps(
+                [c.to_dict() if hasattr(c, 'to_dict') else c for c in (belief.counter_arguments or [])]
+            )
             conn.execute("""
                 INSERT OR REPLACE INTO temporal_beliefs (
                     id, topic, belief_statement, era_label, approx_year_start,
                     approx_year_end, evidence_memory_ids, superseded_by_id,
-                    supersedes_id, active, reason_for_change, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    supersedes_id, active, reason_for_change, created_at,
+                    supporting_evidence, counter_arguments
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 belief.id, belief.topic, belief.belief_statement, belief.era_label,
                 belief.approx_year_start, belief.approx_year_end, json.dumps(belief.evidence_memory_ids),
                 belief.superseded_by_id, belief.supersedes_id, 1 if belief.active else 0,
-                belief.reason_for_change, belief.created_at
+                belief.reason_for_change, belief.created_at,
+                supporting_json, counter_json
             ))
             # Keep temporal_beliefs_fts synchronized
             conn.execute("DELETE FROM temporal_beliefs_fts WHERE id = ?", (belief.id,))
@@ -503,6 +546,14 @@ class DatabaseManager:
             """, (belief.id, belief.topic, belief.belief_statement, belief.era_label, belief.reason_for_change or ""))
             conn.commit()
         return belief.id
+
+    def delete_belief(self, belief_id: str) -> bool:
+        """Deletes a temporal belief and removes it from FTS index."""
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM temporal_beliefs WHERE id = ?", (belief_id,))
+            conn.execute("DELETE FROM temporal_beliefs_fts WHERE id = ?", (belief_id,))
+            conn.commit()
+        return True
 
     def get_beliefs_for_topic(self, topic: str) -> List[TemporalBelief]:
         """

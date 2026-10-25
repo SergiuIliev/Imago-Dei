@@ -417,6 +417,24 @@ async def correct_memory(req: MemoryCorrectionRequest):
     return {"status": "success", "memory": updated_mem.to_dict() if updated_mem else None}
 
 
+@app.post("/api/memories/{memory_id}/verify")
+async def verify_memory_endpoint(memory_id: str):
+    """Directly authenticates and promotes an unverified memory to personal_verified."""
+    mem = db.get_memory(memory_id)
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    success = db.verify_memory(memory_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to verify memory")
+
+    updated_mem = db.get_memory(memory_id)
+    if updated_mem:
+        vector_store.add_memory_embedding(updated_mem)
+
+    return {"status": "success", "memory": updated_mem.to_dict() if updated_mem else None}
+
+
 @app.get("/api/beliefs")
 async def list_beliefs(topic: Optional[str] = None):
     """Lists temporal beliefs illustrating value evolution across life eras."""

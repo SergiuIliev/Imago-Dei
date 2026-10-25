@@ -1,8 +1,118 @@
 /**
- * Material Design 3 Controller for Personal AI Time Capsule — Sergiu.
- * Coordinates Conversation Dialogue, Memory Vault, Belief Timeline,
- * Expressive Voice Synthesis, Video Avatar, and Archive Disaster Recovery.
+ * Personal AI Time Capsule — Sergiu
+ * Web Interface Controller & Audio UX Manager
+ * Inspired by Constantin Brâncuși: "Simplicity is complexity resolved."
  */
+
+// In-memory cache for memories by ID to avoid inline HTML quoting/newline syntax errors
+window._memoriesCache = {};
+
+// --- Global Singleton Audio Controller (No Concurrent Overlaps, Toggle Stop, Visual State) ---
+class CapsuleAudioController {
+  constructor() {
+    this.activeAudio = null;
+    this.activeUrl = null;
+    this.activeButton = null;
+    this.activeButtonOriginalHtml = null;
+  }
+
+  stop() {
+    if (this.activeAudio) {
+      try {
+        this.activeAudio.pause();
+        this.activeAudio.currentTime = 0;
+      } catch (e) {
+        console.warn("Audio pause error:", e);
+      }
+      this.activeAudio = null;
+    }
+    this.resetButtonState();
+    this.activeUrl = null;
+  }
+
+  resetButtonState() {
+    if (this.activeButton) {
+      this.activeButton.classList.remove("is-playing");
+      if (this.activeButtonOriginalHtml !== null) {
+        this.activeButton.innerHTML = this.activeButtonOriginalHtml;
+      }
+      this.activeButton = null;
+      this.activeButtonOriginalHtml = null;
+    }
+  }
+
+  toggle(url, triggerButton = null) {
+    if (!url) return;
+
+    // Resolve trigger button if event occurred without explicit argument
+    if (!triggerButton && window.event) {
+      const target = window.event.currentTarget || window.event.target;
+      if (target) {
+        triggerButton = target.closest("button") || target;
+      }
+    }
+
+    // If clicking the SAME clip that is currently playing -> PAUSE and STOP
+    if (this.activeAudio && this.activeUrl === url && !this.activeAudio.paused) {
+      this.stop();
+      return;
+    }
+
+    // STOP previous audio before starting new one (NO CONCURRENT OVERLAPS)
+    this.stop();
+
+    // Pause studio audio player if playing
+    const studioPlayer = document.getElementById("ttsAudioPlayer");
+    if (studioPlayer && !studioPlayer.paused) {
+      try { studioPlayer.pause(); } catch (_) {}
+    }
+
+    this.activeUrl = url;
+    const audio = new Audio(url);
+    this.activeAudio = audio;
+
+    // Toggle button visual state
+    if (triggerButton) {
+      this.activeButton = triggerButton;
+      this.activeButtonOriginalHtml = triggerButton.innerHTML;
+      triggerButton.classList.add("is-playing");
+      const isSmall = triggerButton.classList.contains("hear-clip-btn");
+      triggerButton.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size:${isSmall ? '13px' : '16px'};">stop</span>
+        <span>Stop</span>
+      `;
+    }
+
+    audio.onended = () => {
+      this.stop();
+    };
+
+    audio.onerror = (e) => {
+      console.error("Audio playback error:", e);
+      this.stop();
+    };
+
+    audio.play().catch(err => {
+      console.warn("Audio play prevented or interrupted:", err);
+      this.stop();
+    });
+  }
+}
+
+const audioController = new CapsuleAudioController();
+
+// Universal global functions for HTML onclick handlers
+window.playAudio = function(url, triggerButton = null) {
+  audioController.toggle(url, triggerButton);
+};
+
+window.toggleAudio = function(url, triggerButton = null) {
+  audioController.toggle(url, triggerButton);
+};
+
+window.stopAllAudio = function() {
+  audioController.stop();
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation & Page Title Sync
@@ -18,11 +128,11 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     "memories": {
       title: "Memory Vault & Evidence Index",
-      subhead: "Inspect, search, and verify atomic memories extracted from recordings"
+      subhead: "Inspect, search, verify, and correct atomic memories with full provenance"
     },
     "beliefs": {
       title: "Temporal Beliefs & Value Evolution",
-      subhead: "Tracking how core philosophies, habits, and priorities evolved over time without erasing the past"
+      subhead: "Tracking how philosophies, habits, and priorities evolved over time without erasing the past"
     },
     "ingestion": {
       title: "Archive Ingestion Pipeline",
@@ -58,6 +168,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (targetTab === "memories") loadMemories();
       if (targetTab === "beliefs") loadBeliefs();
       if (targetTab === "ingestion") loadMediaInventory();
+    });
+  });
+
+  // Stop global audio if user navigates tabs to prevent background phantom audio
+  navItems.forEach(item => {
+    item.addEventListener("click", () => {
+      audioController.stop();
     });
   });
 
@@ -220,7 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
       appendAssistantMessage(data);
 
       if (data.audio_url && voiceAutoPlay.checked) {
-        playAudio(data.audio_url);
+        audioController.toggle(data.audio_url);
       }
     } catch (err) {
       loadingElem.remove();
@@ -237,6 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   clearChatBtn.addEventListener("click", async () => {
+    audioController.stop();
     await initSession();
     chatMessages.innerHTML = `
       <div class="m3-bubble assistant message">
@@ -277,7 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     msg.innerHTML = `
       <div class="bubble-top-meta">
         <span class="author-name">
-          <span class="material-symbols-outlined" style="font-size:16px;">sync</span>
+          <span class="material-symbols-outlined spin-icon" style="font-size:16px;">sync</span>
           <span>Retrieving memories & reasoning...</span>
         </span>
       </div>
@@ -307,9 +425,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="evidence-citation-line" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 4px 0;">
               <span>• ${escapeHtml(ev.citation)}</span>
               ${ev.audio_clip_url ? `
-                <button class="hear-clip-btn" onclick="playAudio('${ev.audio_clip_url}')" title="Listen to original vlog recording">
+                <button class="hear-clip-btn" onclick="playAudio('${escapeAttr(ev.audio_clip_url)}', this)" title="Listen to original vlog recording">
                   <span class="material-symbols-outlined" style="font-size:13px;">headphones</span>
-                  <span>Hear Vlog Clip</span>
+                  <span>Hear Clip</span>
                 </button>
               ` : ''}
             </div>
@@ -332,18 +450,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (data.audio_url) {
       voiceControlsHtml = `
         <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
-          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
+          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${escapeAttr(data.audio_url)}', this)">
             <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
-            <span>Play Voice (${emotion})</span>
+            <span>Play Voice (${escapeHtml(emotion)})</span>
           </button>
         </div>
       `;
     } else {
       voiceControlsHtml = `
         <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
-          <button class="m3-btn m3-btn-outlined" id="synthBtn_${msgId}" onclick="synthesizeMessageVoice('${msgId}', ${escapeHtml(JSON.stringify(data.text))}, '${emotion}')">
+          <button class="m3-btn m3-btn-outlined" id="synthBtn_${msgId}" onclick="synthesizeMessageVoice('${msgId}', ${escapeAttr(JSON.stringify(data.text))}, '${escapeAttr(emotion)}')">
             <span class="material-symbols-outlined" style="font-size:16px;">graphic_eq</span>
-            <span>Synthesize Voice (${emotion})</span>
+            <span>Synthesize Voice (${escapeHtml(emotion)})</span>
           </button>
           <div id="audioSlot_${msgId}"></div>
         </div>
@@ -374,7 +492,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const slot = document.getElementById(`audioSlot_${msgId}`);
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;">sync</span><span>Synthesizing...</span>`;
+      btn.innerHTML = `<span class="material-symbols-outlined spin-icon" style="font-size:16px;">sync</span><span>Synthesizing...</span>`;
     }
 
     try {
@@ -392,12 +510,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.style.display = "none";
       if (slot && data.audio_url) {
         slot.innerHTML = `
-          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${data.audio_url}')">
+          <button class="m3-btn m3-btn-tonal audio-trigger-btn" onclick="playAudio('${escapeAttr(data.audio_url)}', this)">
             <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
-            <span>Play Voice (${emotion})</span>
+            <span>Play Voice (${escapeHtml(emotion)})</span>
           </button>
         `;
-        playAudio(data.audio_url);
+        const playBtn = slot.querySelector("button");
+        playAudio(data.audio_url, playBtn);
       }
     } catch (e) {
       if (btn) {
@@ -405,12 +524,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;">error</span><span>Error: ${e.message}</span>`;
       }
     }
-  };
-
-  // Audio Playback
-  window.playAudio = function(url) {
-    const audio = new Audio(url);
-    audio.play();
   };
 
   // Memory Vault & M3 Filter Chips
@@ -432,46 +545,80 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadMemories() {
     try {
       const status = memoryStatusFilter ? memoryStatusFilter.value : "";
-      const url = status ? `/api/memories?status=${status}` : `/api/memories`;
+      const url = status ? `/api/memories?status=${encodeURIComponent(status)}` : `/api/memories`;
       const res = await fetch(url);
       const memories = await res.json();
       renderMemories(memories);
     } catch (err) {
-      memoryGrid.innerHTML = `<div class="m3-card">Error loading memories: ${err.message}</div>`;
+      memoryGrid.innerHTML = `<div class="m3-card" style="grid-column: 1/-1; color:var(--md-sys-color-error);">Error loading memories: ${err.message}</div>`;
     }
   }
 
   function renderMemories(memories) {
+    // Populate in-memory cache to guarantee safe event dispatching without inline unescaped strings
+    window._memoriesCache = {};
+    memories.forEach(m => {
+      window._memoriesCache[m.id] = m;
+    });
+
     const filterText = (memorySearchInput.value || "").toLowerCase();
     const filtered = memories.filter(m => 
       !filterText || m.content.toLowerCase().includes(filterText) || (m.summary && m.summary.toLowerCase().includes(filterText))
     );
 
     if (filtered.length === 0) {
-      memoryGrid.innerHTML = `<div class="m3-card" style="grid-column: 1/-1; text-align:center; padding:32px;">No memories match the current filter.</div>`;
+      memoryGrid.innerHTML = `<div class="m3-card" style="grid-column: 1/-1; text-align:center; padding:36px; color:var(--md-sys-color-on-surface-variant);">No memories match the current filter.</div>`;
       return;
     }
 
     memoryGrid.innerHTML = filtered.map(m => {
       let badgeClass = "m3-badge-unverified";
-      if (m.verification_status === "personal_verified") badgeClass = "m3-badge-verified";
-      if (m.verification_status === "synthetic_fixture") badgeClass = "m3-badge-synthetic";
+      const isVerified = (m.verification_status === "personal_verified");
+      if (isVerified) badgeClass = "m3-badge-verified";
+      else if (m.verification_status === "synthetic_fixture") badgeClass = "m3-badge-synthetic";
+
+      const hasAudioClip = m.source_id && (m.start_seconds !== null && m.start_seconds !== undefined) && (m.end_seconds !== null && m.end_seconds !== undefined);
+      const clipUrl = hasAudioClip ? `/api/media/${encodeURIComponent(m.source_id)}/clip?start=${m.start_seconds}&end=${m.end_seconds}` : null;
 
       return `
-        <div class="m3-card">
+        <div class="m3-card memory-card" id="mem_card_${escapeAttr(m.id)}">
           <div class="m3-card-header">
-            <span class="m3-badge ${badgeClass}">${m.verification_status}</span>
-            <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant); font-family:var(--md-sys-typescale-mono);">${m.date_occurred || 'Date Unknown'}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="m3-badge ${badgeClass}">${escapeHtml(m.verification_status)}</span>
+              ${m.category ? `<span class="memory-category-tag">${escapeHtml(m.category)}</span>` : ''}
+            </div>
+            <span style="font-size:12px; color:var(--md-sys-color-on-surface-variant); font-family:var(--md-sys-typescale-mono);">${escapeHtml(m.date_occurred || 'Date Unknown')}</span>
           </div>
           <div class="m3-card-body">
-            <p>${escapeHtml(m.content)}</p>
+            <p style="white-space: pre-wrap;">${escapeHtml(m.content)}</p>
+            ${m.summary && m.summary !== m.content ? `<p style="margin-top:8px; font-size:12px; color:var(--md-sys-color-on-surface-variant); font-style:italic;">${escapeHtml(m.summary)}</p>` : ''}
           </div>
           <div class="m3-card-footer">
-            <span style="font-size:12px; color:var(--md-sys-color-outline);">Tone: <strong>${m.emotional_tone || 'neutral'}</strong></span>
-            <button class="m3-btn m3-btn-tonal" onclick="openCorrectionModal('${m.id}', '${escapeAttr(m.content)}')">
-              <span class="material-symbols-outlined" style="font-size:16px;">edit</span>
-              <span>Correct / Verify</span>
-            </button>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:12px; color:var(--md-sys-color-outline);">Tone: <strong>${escapeHtml(m.emotional_tone || 'neutral')}</strong></span>
+              ${clipUrl ? `
+                <button class="hear-clip-btn" onclick="playAudio('${escapeAttr(clipUrl)}', this)" title="Listen to original vlog sound clip">
+                  <span class="material-symbols-outlined" style="font-size:13px;">headphones</span>
+                  <span>Listen Clip</span>
+                </button>
+              ` : ''}
+            </div>
+            <div class="card-action-buttons" style="display:flex; align-items:center; gap:8px;">
+              ${!isVerified ? `
+                <button class="m3-btn m3-btn-filled m3-btn-verify-direct" onclick="directVerifyMemory('${escapeAttr(m.id)}', this)" title="Direct one-click approval & verification">
+                  <span class="material-symbols-outlined" style="font-size:16px;">verified</span>
+                  <span>Verify</span>
+                </button>
+              ` : `
+                <span class="verified-check-indicator" title="Personal Verified">
+                  <span class="material-symbols-outlined" style="font-size:18px; color:var(--md-sys-color-success);">check_circle</span>
+                </span>
+              `}
+              <button class="m3-btn m3-btn-tonal" onclick="openCorrectionModal('${escapeAttr(m.id)}')" title="Edit text or add notes">
+                <span class="material-symbols-outlined" style="font-size:16px;">edit_note</span>
+                <span>Edit</span>
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -489,15 +636,60 @@ document.addEventListener("DOMContentLoaded", () => {
   const cancelCorrectionBtn = document.getElementById("cancelCorrectionBtn");
   const saveCorrectionBtn = document.getElementById("saveCorrectionBtn");
 
-  window.openCorrectionModal = function(id, content) {
-    modalMemoryId.value = id;
-    modalMemoryContent.value = content;
+  // Open modal using ID lookup from in-memory cache
+  window.openCorrectionModal = function(id) {
+    const mem = window._memoriesCache[id];
+    if (!mem) {
+      console.warn("Memory item not found in cache for id:", id);
+      return;
+    }
+    modalMemoryId.value = mem.id;
+    modalMemoryContent.value = mem.content || "";
     modalCorrectionReason.value = "";
     correctionModal.style.display = "flex";
   };
 
+  // Direct one-click verification action
+  window.directVerifyMemory = async function(id, btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="material-symbols-outlined spin-icon" style="font-size:16px;">sync</span><span>Verifying...</span>`;
+    }
+
+    try {
+      const res = await fetch(`/api/memories/${encodeURIComponent(id)}/verify`, {
+        method: "POST"
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Verification failed");
+      }
+
+      const data = await res.json();
+      if (data.memory && window._memoriesCache[id]) {
+        window._memoriesCache[id] = data.memory;
+      }
+      await loadMemories();
+      updateSidebarStats();
+    } catch (err) {
+      alert(`Verification error: ${err.message}`);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;">verified</span><span>Verify</span>`;
+      }
+    }
+  };
+
   cancelCorrectionBtn.addEventListener("click", () => {
     correctionModal.style.display = "none";
+  });
+
+  // Close modal when clicking on scrim outside dialog card
+  correctionModal.addEventListener("click", (e) => {
+    if (e.target === correctionModal) {
+      correctionModal.style.display = "none";
+    }
   });
 
   saveCorrectionBtn.addEventListener("click", async () => {
@@ -506,6 +698,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const reason = modalCorrectionReason.value.trim() || "User manual clarification";
 
     if (!newContent) return;
+
+    saveCorrectionBtn.disabled = true;
+    saveCorrectionBtn.innerHTML = `<span class="material-symbols-outlined spin-icon" style="font-size:16px;">sync</span><span>Saving...</span>`;
 
     try {
       const res = await fetch("/api/memories/correct", {
@@ -524,6 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
       updateSidebarStats();
     } catch (err) {
       alert(`Error saving correction: ${err.message}`);
+    } finally {
+      saveCorrectionBtn.disabled = false;
+      saveCorrectionBtn.innerHTML = `<span>Save & Verify</span>`;
     }
   });
 
@@ -535,14 +733,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const beliefs = await res.json();
 
       if (beliefs.length === 0) {
-        beliefsTimeline.innerHTML = `<div class="m3-card">No beliefs recorded yet.</div>`;
+        beliefsTimeline.innerHTML = `<div class="m3-card" style="text-align:center; padding:36px; color:var(--md-sys-color-on-surface-variant);">No beliefs recorded yet.</div>`;
         return;
       }
 
       beliefsTimeline.innerHTML = beliefs.map(b => {
         const itemClass = b.active ? "active" : "superseded";
         const statusBadge = b.active 
-          ? `<span class="m3-badge m3-badge-verified">Active Belief</span>` 
+          ? `<span class="m3-badge m3-badge-verified">Active Core Belief</span>` 
           : `<span class="m3-badge m3-badge-synthetic">Superseded Historical Belief</span>`;
 
         return `
@@ -551,12 +749,36 @@ document.addEventListener("DOMContentLoaded", () => {
               <span class="timeline-topic-title">${escapeHtml(b.topic)}</span>
               <span class="timeline-era-label">${escapeHtml(b.era_label)}</span>
             </div>
-            <div style="font-size:15px; font-style:italic; color:var(--md-sys-color-on-surface); margin:8px 0;">
+            <div style="font-size:15px; font-style:italic; color:var(--md-sys-color-on-surface); margin:10px 0;">
               "${escapeHtml(b.belief_statement)}"
             </div>
             ${b.reason_for_change ? `
-              <div style="font-size:13px; color:var(--md-sys-color-on-surface-variant); margin-top:8px; padding-left:12px; border-left:2px solid var(--md-sys-color-outline-variant);">
-                <strong>Why perspective changed:</strong> ${escapeHtml(b.reason_for_change)}
+              <div style="font-size:13px; color:var(--md-sys-color-on-surface-variant); margin-top:10px; padding-left:14px; border-left:2px solid var(--md-sys-color-outline-variant);">
+                <strong>Evolution Context:</strong> ${escapeHtml(b.reason_for_change)}
+              </div>
+            ` : ''}
+            ${(b.supporting_evidence && b.supporting_evidence.length > 0) ? `
+              <div style="margin-top:12px; font-size:12px; background:rgba(0,0,0,0.15); border-radius:8px; padding:10px;">
+                <div style="font-weight:600; color:var(--md-sys-color-primary); margin-bottom:6px;">
+                  <span class="material-symbols-rounded" style="font-size:14px; vertical-align:middle;">verified</span> Grounded Supporting Evidence (${b.supporting_evidence.length})
+                </div>
+                ${b.supporting_evidence.map(ev => `
+                  <div style="margin-bottom:6px; color:var(--md-sys-color-on-surface-variant); padding-left:8px; border-left:2px solid var(--md-sys-color-primary);">
+                    <span style="font-weight:500; color:var(--md-sys-color-outline);">${escapeHtml(ev.timestamp_str || 'Archive')}${ev.start_seconds !== undefined && ev.start_seconds !== null ? ` (${ev.start_seconds}s-${ev.end_seconds}s)` : ''}</span>: "${escapeHtml(ev.quote)}"
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+            ${(b.counter_arguments && b.counter_arguments.length > 0) ? `
+              <div style="margin-top:10px; font-size:12px; background:rgba(255,180,168,0.08); border-radius:8px; padding:10px;">
+                <div style="font-weight:600; color:var(--md-sys-color-tertiary); margin-bottom:6px;">
+                  <span class="material-symbols-rounded" style="font-size:14px; vertical-align:middle;">balance</span> Dialectical Counterarguments & Nuances (${b.counter_arguments.length})
+                </div>
+                ${b.counter_arguments.map(ca => `
+                  <div style="margin-bottom:6px; color:var(--md-sys-color-on-surface-variant); padding-left:8px; border-left:2px solid var(--md-sys-color-tertiary);">
+                    <span style="font-weight:500; color:var(--md-sys-color-outline);">${escapeHtml(ca.timestamp_str || 'Observation')}${ca.start_seconds !== undefined && ca.start_seconds !== null ? ` (${ca.start_seconds}s-${ca.end_seconds}s)` : ''}</span>: "${escapeHtml(ca.quote)}"
+                  </div>
+                `).join('')}
               </div>
             ` : ''}
             <div style="margin-top: 14px;">${statusBadge}</div>
@@ -564,7 +786,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
       }).join("");
     } catch (err) {
-      beliefsTimeline.innerHTML = `<div class="m3-card">Error loading beliefs: ${err.message}</div>`;
+      beliefsTimeline.innerHTML = `<div class="m3-card" style="color:var(--md-sys-color-error);">Error loading beliefs: ${err.message}</div>`;
     }
   }
 
@@ -592,7 +814,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const media = await res.json();
 
       if (media.length === 0) {
-        mediaTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--md-sys-color-on-surface-variant);">No media files ingested yet. Run synthetic test below.</td></tr>`;
+        mediaTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:28px; color:var(--md-sys-color-on-surface-variant);">No media files ingested yet. Run synthetic test below.</td></tr>`;
         return;
       }
 
@@ -635,6 +857,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const synthesizeBtn = document.getElementById("synthesizeBtn");
   const ttsAudioPlayer = document.getElementById("ttsAudioPlayer");
 
+  if (ttsAudioPlayer) {
+    ttsAudioPlayer.addEventListener("play", () => {
+      audioController.stop();
+    });
+  }
+
   ttsRateRange.addEventListener("input", () => {
     rateVal.innerText = `${ttsRateRange.value}x`;
   });
@@ -645,7 +873,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const text = ttsTextInput.value.trim();
     if (!text) return;
 
-    synthesizeBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:18px;">sync</span> <span>Synthesizing...</span>`;
+    synthesizeBtn.innerHTML = `<span class="material-symbols-outlined spin-icon" style="font-size:18px;">sync</span> <span>Synthesizing...</span>`;
     try {
       const res = await fetch("/api/tts/synthesize", {
         method: "POST",
@@ -663,6 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
         lastSynthesizedAudioFilename = data.filename;
         ttsAudioPlayer.src = data.audio_url;
         ttsAudioPlayer.style.display = "block";
+        audioController.stop();
         ttsAudioPlayer.play();
       }
     } catch (err) {
@@ -760,12 +989,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helpers
   function escapeHtml(str) {
     if (!str) return "";
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function escapeAttr(str) {
     if (!str) return "";
-    return str.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   updateSidebarStats();

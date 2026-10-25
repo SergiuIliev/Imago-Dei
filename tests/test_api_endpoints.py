@@ -55,6 +55,37 @@ class TestAPIEndpoints(unittest.TestCase):
         data = resp.json()
         self.assertIsInstance(data, list)
 
+    def test_api_memory_verify_endpoint(self):
+        """Verifies direct one-click verification of an unverified memory."""
+        # Find or create a memory
+        from core.models import MemoryItem, VerificationStatus
+        from app.main import db
+        mem_id = f"test-verify-{sys.platform}"
+        test_mem = MemoryItem(
+            id=mem_id,
+            content="Testing direct verification endpoint.",
+            summary="Direct verification test",
+            verification_status=VerificationStatus.EXTRACTED_UNVERIFIED
+        )
+        db.add_memory(test_mem)
+
+        # Call verify endpoint
+        try:
+            resp = self.client.post(f"/api/memories/{mem_id}/verify")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "success")
+            self.assertEqual(data["memory"]["verification_status"], "personal_verified")
+
+            # Nonexistent memory should 404
+            resp_404 = self.client.post("/api/memories/nonexistent-id-xyz/verify")
+            self.assertEqual(resp_404.status_code, 404)
+        finally:
+            with db.get_connection() as conn:
+                conn.execute("DELETE FROM memories WHERE id = ?", (mem_id,))
+                conn.execute("DELETE FROM memories_fts WHERE id = ?", (mem_id,))
+                conn.commit()
+
     def test_api_beliefs_list(self):
         """Verifies querying temporal beliefs."""
         resp = self.client.get("/api/beliefs")

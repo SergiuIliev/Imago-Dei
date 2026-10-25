@@ -241,6 +241,49 @@ class PersonalityProfile:
         """Returns all configured chronological persona snapshots."""
         return list(self.snapshots.values())
 
+    @staticmethod
+    def format_dialectical_beliefs(beliefs: List[Any]) -> str:
+        """
+        Formats temporal beliefs dialectically:
+        Displays the active belief, its supporting evidence with dates/timestamps,
+        and any dialectical counterarguments, caveats, or nuances with dates/timestamps.
+        For historical superseded beliefs, details the corroborated evidence that prompted the evolution.
+        """
+        if not beliefs:
+            return ""
+
+        lines = ["DIALECTICAL TEMPORAL BELIEFS & LONGITUDINAL EVOLUTION:"]
+        for b in beliefs:
+            status_desc = "ACTIVE" if getattr(b, 'active', True) else f"SUPERSEDED (Replaced by: {getattr(b, 'superseded_by_id', None) or 'newer paradigm'} | Reason: {getattr(b, 'reason_for_change', None) or 'Empirical evolution'})"
+            lines.append(f"- [{b.era_label}] Topic: {b.topic}")
+            lines.append(f"  * Core Statement: \"{b.belief_statement}\" [Status: {status_desc}]")
+
+            # Supporting evidence with timestamps
+            supp = getattr(b, 'supporting_evidence', []) or []
+            if supp:
+                lines.append("  * Grounded Supporting Evidence:")
+                for ev in supp:
+                    t_str = ev.get("timestamp_str") or "Recorded Archive"
+                    span = ""
+                    if ev.get("start_seconds") is not None and ev.get("end_seconds") is not None:
+                        span = f" ({ev['start_seconds']}s-{ev['end_seconds']}s)"
+                    src = f" [Source: {ev['source_id'][:8]}]" if ev.get("source_id") else ""
+                    lines.append(f"    - [{t_str}{span}{src}]: \"{ev.get('quote', '')}\"")
+
+            # Dialectical counterarguments / caveats with timestamps
+            cas = getattr(b, 'counter_arguments', []) or []
+            if cas:
+                lines.append("  * Dialectical Counterarguments & Nuances:")
+                for ca in cas:
+                    t_str = ca.get("timestamp_str") or "Recorded Observation"
+                    span = ""
+                    if ca.get("start_seconds") is not None and ca.get("end_seconds") is not None:
+                        span = f" ({ca['start_seconds']}s-{ca['end_seconds']}s)"
+                    src = f" [Source: {ca['source_id'][:8]}]" if ca.get("source_id") else ""
+                    lines.append(f"    - [{t_str}{span}{src}]: \"{ca.get('quote', '')}\"")
+
+        return "\n".join(lines)
+
     def build_system_prompt(
         self,
         era: Optional[PersonaSnapshot],
@@ -295,7 +338,10 @@ STRICT IDENTITY & ANTI-ROLEPLAY DIRECTIVES:
 4. HONEST UNCERTAINTY: If the archive has no evidence or insufficient data on a subject, state clearly and honestly in plain words: "I don't recall mentioning this in my recorded memories" or "I don't have a record of that in my archive." Never invent fake life events.
 5. CITATIONS & TIMESTAMPS: When referring to specific events, cite the recorded date, timestamp, or source ID.
 6. PROVENANCE AWARENESS: Distinguish between [PERSONAL_VERIFIED] memories, [EXTRACTED_UNVERIFIED] observations, and [SYNTHETIC_FIXTURE] test data. If mentioning test fixtures, explicitly state they are synthetic test material.
-7. CONTRADICTIONS & BELIEF EVOLUTION: If your thinking evolved on a topic over time, explain how and why your perspective changed rather than flattening it.
+7. DIALECTICAL RIGOR & BELIEF EVOLUTION: When discussing beliefs, philosophies, or opinions, always reason dialectically:
+   - Ground the active belief in its supporting evidence with explicit dates and timestamps.
+   - Address any dialectical counterarguments, caveats, or trade-offs documented in the archive (e.g. intense immersion loops vs sleep hygiene, zero-tolerance exam standards vs exploratory failure in code, simplicity achieved only after resolving underlying architectural complexity).
+   - If a belief evolved, compare and contrast the historical trajectory showing how empirical evidence forced the shift. A single outlier piece of evidence never invalidates a foundational belief—it attaches as a dialectical nuance; only corroborated multi-source evidence supersedes a paradigm.
 8. NATURAL CADENCE: Speak with natural warmth, measured cadence (~121 WPM), clarity, and gentle dry humor where appropriate. Avoid corporate assistant clichés ("As an AI...", "Certainly!", "Sure thing!").
 
 {era_context}

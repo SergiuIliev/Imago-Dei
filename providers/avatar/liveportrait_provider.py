@@ -234,8 +234,9 @@ class LivePortraitAvatarProvider(AvatarProvider):
     ) -> List[Tuple[float, float, float]]:
         """
         Dynamically tracks face bounding box and mouth anchors (cx, cy, scale)
-        across each frame of the driving loop with exponential moving average smoothing.
-        Prevents facial tearing when head nods or sways.
+        across each frame of the driving loop with outlier rejection and circular
+        zero-phase Gaussian smoothing. Eliminates high-frequency jitter while faithfully
+        following natural head kinematics and nods across loop boundaries.
         """
         if not hasattr(self, "_mouth_anchor_cache"):
             self._mouth_anchor_cache = {}
@@ -251,6 +252,7 @@ class LivePortraitAvatarProvider(AvatarProvider):
         }
         default_cx, default_cy, default_sc = era_priors.get(norm_era or "2026", (256.0, 304.0, 1.05))
 
+        L = len(frames)
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         fc = cv2.CascadeClassifier(cascade_path) if os.path.exists(cascade_path) else None
 
@@ -259,9 +261,9 @@ class LivePortraitAvatarProvider(AvatarProvider):
             if fc is not None:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 det = fc.detectMultiScale(gray, 1.05, 3, minSize=(60, 60))
-                valid = [b for b in det if abs(b[0] + b[2] / 2.0 - 256) < 120 and abs(b[1] + b[3] / 2.0 - 220) < 120]
+                valid = [b for b in det if abs(b[0] + b[2] / 2.0 - default_cx) < 90 and abs(b[1] + 0.77 * b[3] - default_cy) < 80]
                 if valid:
-                    best = min(valid, key=lambda b: (b[0] + b[2] / 2.0 - 256)**2 + (b[1] + b[3] / 2.0 - 220)**2)
+                    best = min(valid, key=lambda b: (b[0] + b[2] / 2.0 - default_cx)**2 + (b[1] + 0.77 * b[3] - default_cy)**2)
                     fx, fy, fw, fh = best
                     cx = float(fx + fw / 2.0)
                     cy = float(fy + 0.77 * fh)
@@ -270,26 +272,167 @@ class LivePortraitAvatarProvider(AvatarProvider):
                     continue
             raw_coords.append(None)
 
-        known = [c for c in raw_coords if c is not None]
-        med_cx = float(np.median([c[0] for c in known])) if known else default_cx
-        med_cy = float(np.median([c[1] for c in known])) if known else default_cy
-        med_sc = float(np.median([c[2] for c in known])) if known else default_sc
+        known_idx = [i for i, c in enumerate(raw_coords) if c is not None]
+        if not known_idx:
+            smooth = [(default_cx, default_cy, default_sc)] * L
+            self._mouth_anchor_cache[video_path] = smooth
+            return smooth
 
-        # Smooth using forward-backward EMA to eliminate jitter while faithfully following head motion
-        smooth: List[Tuple[float, float, float]] = []
-        curr = (med_cx, med_cy, med_sc)
-        alpha = 0.20
-        for c in raw_coords:
-            tgt = c if c is not None else curr
-            curr = (
-                alpha * tgt[0] + (1.0 - alpha) * curr[0],
-                alpha * tgt[1] + (1.0 - alpha) * curr[1],
-                alpha * tgt[2] + (1.0 - alpha) * curr[2],
-            )
-            smooth.append(curr)
+        # Robust interpolation across un-detected frames
+        coords: List[Tuple[float, float, float]] = []
+        for i in range(L):
+            if raw_coords[i] is not None:
+                coords.append(raw_coords[i])
+            else:
+                left = max([k for k in known_idx if k <= i], default=known_idx[0])
+                right = min([k for k in known_idx if k >= i], default=known_idx[-1])
+                if left == right:
+                    coords.append(raw_coords[left])
+                else:
+                    w = float(i - left) / float(right - left)
+                    cl, cr = raw_coords[left], raw_coords[right]
+                    coords.append((
+                        (1.0 - w) * cl[0] + w * cr[0],
+                        (1.0 - w) * cl[1] + w * cr[1],
+                        (1.0 - w) * cl[2] + w * cr[2]
+                    ))
 
+        arr = np.array(coords, dtype=np.float32)
+
+        # 1. Median filter outlier rejection across window of 7 frames
+        from scipy.signal import medfilt
+        from scipy.ndimage import gaussian_filter1d
+        clean_x = medfilt(arr[:, 0], kernel_size=7)
+        clean_y = medfilt(arr[:, 1], kernel_size=7)
+        clean_sc = medfilt(arr[:, 2], kernel_size=7)
+
+        # 2. Circular zero-phase Gaussian smoothing across loop boundaries (sigma = 4.0 frames)
+        pad = 25
+        padded_x = np.pad(clean_x, pad, mode="wrap")
+        padded_y = np.pad(clean_y, pad, mode="wrap")
+        padded_sc = np.pad(clean_sc, pad, mode="wrap")
+
+        smooth_x = gaussian_filter1d(padded_x, sigma=4.0)[pad:-pad]
+        smooth_y = gaussian_filter1d(padded_y, sigma=4.0)[pad:-pad]
+        smooth_sc = gaussian_filter1d(padded_sc, sigma=4.0)[pad:-pad]
+
+        smooth = [(float(smooth_x[i]), float(smooth_y[i]), float(smooth_sc[i])) for i in range(L)]
         self._mouth_anchor_cache[video_path] = smooth
         return smooth
+
+    @staticmethod
+    def _compute_smooth_deformation_field(
+        grid_x: np.ndarray,
+        grid_y: np.ndarray,
+        cx_m: float,
+        cy_m: float,
+        sc: float,
+        op: float,
+        wd: float
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Computes a C1-continuous, diffeomorphic deformation vector field (flow_x, flow_y).
+        Accurately mimics human mandibular articulation (jaw lowering, lower lip depression,
+        subtle upper lip lift, horizontal corner spread on open vowels) with strictly bounded
+        spatial gradients to prevent folding, tearing, or texture smearing.
+        """
+        dx = (grid_x - cx_m) / sc
+        dy = (grid_y - cy_m) / sc
+
+        # 1. Mandibular and Lower Lip Articulation (Downward Motion, dy > 0)
+        # Asymmetric vertical profile: peaks at lower lip/chin (dy = 8..14), decays smoothly to 0 at dy = 65 (neck)
+        sigma_x = 34.0
+        w_x = np.exp(-0.5 * (dx / sigma_x)**2).astype(np.float32)
+
+        env_jaw = (
+            np.exp(-0.5 * (np.maximum(0.0, dy - 8.0) / 22.0)**2) *
+            np.exp(-0.5 * (np.minimum(0.0, dy - 8.0) / 12.0)**2)
+        ).astype(np.float32)
+
+        # 2. Upper Lip Subtle Lift (Upward Motion, dy < 0)
+        # Peaks at dy = -6, smoothly decays to zero at philtrum / nose base (dy = -22) and mouth cleft (dy = +4)
+        env_up = (
+            np.exp(-0.5 * (np.maximum(0.0, -dy - 5.0) / 10.0)**2) *
+            np.exp(-0.5 * (np.minimum(0.0, -dy - 5.0) / 8.0)**2)
+        ).astype(np.float32)
+
+        jaw_amp = 7.0 * op * sc
+        up_amp = 1.4 * op * sc
+        raw_flow_y = w_x * (env_jaw * jaw_amp - env_up * up_amp)
+
+        # 3. Horizontal Mouth Corner Spread (Outward Dipole Motion)
+        # Linear divergent core dx * exp(-0.5 * (dx/sigma_cx)^2) is C-infinity smooth with zero cusp at center
+        sigma_cx = 26.0
+        sigma_cy = 14.0
+        env_corner_y = np.exp(-0.5 * (dy / sigma_cy)**2).astype(np.float32)
+        dipole_x = ((dx / sigma_cx) * np.exp(-0.5 * ((dx / sigma_cx)**2 - 1.0))).astype(np.float32)
+        spread_amp = (2.8 * op + 4.2 * wd * op) * sc
+        raw_flow_x = dipole_x * env_corner_y * spread_amp
+
+        # 4. Gradient-Aware Smooth Boundary Feathering
+        # Eliminates distortion outside the lower-face region by smoothly tapering displacement vectors
+        # to zero at the outer boundary. This enforces an exact C1 boundary match with the base frame.
+        dist_bound = (dx / 46.0)**2 + ((dy - 10.0) / 48.0)**2
+        bound_mask = np.clip(1.0 - dist_bound, 0.0, 1.0)
+        bound_weight = (0.5 * (1.0 - np.cos(np.pi * bound_mask))).astype(np.float32)
+
+        flow_x = (raw_flow_x * bound_weight).astype(np.float32)
+        flow_y = (raw_flow_y * bound_weight).astype(np.float32)
+
+        return flow_x, flow_y
+
+    @staticmethod
+    def _apply_organic_oral_cavity_depth(
+        warped: np.ndarray,
+        grid_x: np.ndarray,
+        grid_y: np.ndarray,
+        cx_m: float,
+        cy_m: float,
+        sc: float,
+        op: float,
+        wd: float
+    ) -> np.ndarray:
+        """
+        Synthesizes organic oral cavity depth on open vowels without darkening white tooth enamel
+        or muddying lip mucosa. Deepens interior pharyngeal darkness while preserving specular
+        highlights on tooth enamel.
+        """
+        if op <= 0.22:
+            return warped
+
+        dx = (grid_x - cx_m) / sc
+        dy = (grid_y - (cy_m - 2.0 * sc)) / sc
+
+        # Dynamic oral aperture mask
+        rx = 22.0 * (1.0 + 0.25 * wd)
+        ry = 9.0 * (0.6 + 0.5 * op)
+        dist_apt = (dx / rx)**2 + (dy / ry)**2
+        apt_mask = np.clip(1.0 - dist_apt, 0.0, 1.0)
+        apt_spatial = 0.5 * (1.0 - np.cos(np.pi * apt_mask))
+
+        # Color and luminance decomposition in HSV space
+        hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV).astype(np.float32)
+        s = hsv[:, :, 1] / 255.0
+        v = hsv[:, :, 2] / 255.0
+
+        # Deep cavity pixels: low luminance (v < 0.42)
+        cavity_candidate = np.clip((0.42 - v) / 0.22, 0.0, 1.0)
+        # Tooth enamel pixels: high luminance (v >= 0.48) and low/medium saturation (s <= 0.45)
+        teeth_candidate = np.clip((v - 0.48) / 0.15, 0.0, 1.0) * np.clip((0.45 - s) / 0.25, 0.0, 1.0)
+
+        # Deepen cavity darkness towards authentic ambient facial shadow (RGB: 18, 14, 16)
+        depth_weight = (apt_spatial * cavity_candidate * (0.45 * op)).astype(np.float32)
+        ambient_shadow = np.array([20.0, 16.0, 16.0], dtype=np.float32)
+
+        deepened = warped.astype(np.float32)
+        for c in range(3):
+            deepened[:, :, c] = (1.0 - depth_weight) * deepened[:, :, c] + depth_weight * np.minimum(deepened[:, :, c], ambient_shadow[c])
+
+        # Preserve and gently enhance tooth enamel specular reflectance
+        enamel_boost = (apt_spatial * teeth_candidate * (0.08 * op))[:, :, np.newaxis]
+        deepened = np.clip(deepened * (1.0 + enamel_boost), 0, 255).astype(np.uint8)
+
+        return deepened
 
     def create_render_job(
         self,
@@ -472,14 +615,16 @@ class LivePortraitAvatarProvider(AvatarProvider):
         fps = self.target_fps
         target_sr = 24000
 
-        # 1. Load Audio and Compute Exact Lockstep Framing
+        # 1. Load Audio and Compute Exact Lockstep Framing (0.00ms A/V alignment)
         audio_data, sr = self._load_audio_data(audio_path, target_sr=target_sr)
         aac_frame_size = 1024
-        num_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        min_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        # Align to LCM block multiple of 15 AAC frames = 16 video frames for exact 0.00ms duration delta
+        k_blocks = max(1, int((min_aac_frames + 14) // 15))
+        num_aac_frames = 15 * k_blocks
+        num_frames = 16 * k_blocks
         total_audio_samples = num_aac_frames * aac_frame_size
         audio_dur = total_audio_samples / float(sr)
-
-        num_frames = max(1, int(round(audio_dur * fps)))
         samples_per_frame = sr // fps  # 960 samples per video frame for feature extraction
 
         padded_audio = np.zeros(max(total_audio_samples, num_frames * samples_per_frame), dtype=np.float32)
@@ -508,8 +653,8 @@ class LivePortraitAvatarProvider(AvatarProvider):
                 raw_openness[i] = np.clip((low_e / total_e) * (rms / 0.035), 0.0, 1.0)
                 raw_width[i] = np.clip((high_e / total_e) * 1.5 - 0.5, -0.4, 0.6)
 
-        # Smooth envelope across adjacent frames for natural articulatory inertia
-        kernel = np.array([0.2, 0.6, 0.2], dtype=np.float32)
+        # Smooth envelope across adjacent frames for natural articulatory inertia (5-tap Gaussian filter)
+        kernel = np.array([0.08, 0.25, 0.34, 0.25, 0.08], dtype=np.float32)
         openness_seq = np.convolve(raw_openness, kernel, mode="same")
         width_seq = np.convolve(raw_width, kernel, mode="same")
         rms_seq = np.convolve(raw_rms, kernel, mode="same")
@@ -566,49 +711,33 @@ class LivePortraitAvatarProvider(AvatarProvider):
             op = float(openness_seq[i])
             wd = float(width_seq[i])
 
-            # Dynamic spatial deformation fields centered on moving mouth
-            sigma_x_jaw = 34.0 * sc
-            sigma_y_jaw = 40.0 * sc
-            r_x = (grid_x - cx_m) / sigma_x_jaw
-            r_y = np.maximum(0.0, (grid_y - cy_m) / sigma_y_jaw)
-            jaw_weight = (np.exp(-0.5 * (r_x**2 + r_y**2)) * (grid_y >= cy_m)).astype(np.float32)
+            # 1. Compute C1-continuous non-rigid diffeomorphic deformation field
+            flow_x, flow_y = self._compute_smooth_deformation_field(
+                grid_x=grid_x,
+                grid_y=grid_y,
+                cx_m=cx_m,
+                cy_m=cy_m,
+                sc=sc,
+                op=op,
+                wd=wd
+            )
 
-            r_y_up = np.maximum(0.0, (cy_m - grid_y) / (12.0 * sc))
-            upper_weight = (np.exp(-0.5 * (r_x**2 + r_y_up**2)) * (grid_y < cy_m)).astype(np.float32)
-
-            corner_dist_x = (np.abs(grid_x - cx_m) - 24.0 * sc) / 12.0
-            corner_dist_y = (grid_y - cy_m) / 10.0
-            corner_weight = np.exp(-0.5 * (corner_dist_x**2 + corner_dist_y**2)).astype(np.float32)
-            corner_dir = np.sign(grid_x - cx_m).astype(np.float32)
-
-            # Dynamic Gaussian Alpha Blend Mask centered on moving lower face
-            sigma_blend_x = 44.0 * sc
-            sigma_blend_y = 52.0 * sc
-            blend_dist = ((grid_x - cx_m) / sigma_blend_x)**2 + ((grid_y - (cy_m + 6.0 * sc)) / sigma_blend_y)**2
-            gaussian_mask = np.clip(np.exp(-0.5 * blend_dist), 0.0, 1.0).astype(np.float32)
-            gaussian_mask_3c = np.repeat(gaussian_mask[:, :, np.newaxis], 3, axis=2)
-
-            flow_y = (jaw_weight * (9.0 * op) - upper_weight * (2.4 * op)).astype(np.float32)
-            flow_x = (corner_weight * (corner_dir * (3.5 * op + 5.0 * wd * op))).astype(np.float32)
-
+            # 2. Warp base frame with sub-pixel Lanczos4 interpolation
             map_x = grid_x - flow_x
             map_y = grid_y - flow_y
             warped = cv2.remap(base_frame, map_x, map_y, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REFLECT)
 
-            # Natural Oral Cavity Depth Shading on Open Vowels (No hardcoded pixel drawing)
-            if op > 0.30:
-                cavity_y = cy_m + 2.0 * sc
-                cavity_rx = 16.0 * sc * (1.0 + 0.3 * wd)
-                cavity_ry = 6.0 * sc * op
-                cdist = ((grid_x - cx_m) / max(1.0, cavity_rx))**2 + ((grid_y - cavity_y) / max(1.0, cavity_ry))**2
-                darken = np.clip(1.0 - cdist, 0.0, 1.0) * (0.35 * op)
-                warped = (warped.astype(np.float32) * (1.0 - darken[:, :, np.newaxis])).astype(np.uint8)
-
-            # Smooth Gaussian alpha blend onto the base driving video frame
-            speech_act = float(np.clip(3.0 * op, 0.0, 1.0))
-            eff_alpha = gaussian_mask_3c * speech_act
-            final_frame = (1.0 - eff_alpha) * base_frame.astype(np.float32) + eff_alpha * warped.astype(np.float32)
-            final_frame = np.clip(final_frame, 0, 255).astype(np.uint8)
+            # 3. Dynamic Organic Oral Cavity Depth Shading & Enamel Preservation
+            final_frame = self._apply_organic_oral_cavity_depth(
+                warped=warped,
+                grid_x=grid_x,
+                grid_y=grid_y,
+                cx_m=cx_m,
+                cy_m=cy_m,
+                sc=sc,
+                op=op,
+                wd=wd
+            )
 
             # Encode Video Frame
             rgb_frame = cv2.cvtColor(final_frame, cv2.COLOR_BGR2RGB)
@@ -709,16 +838,18 @@ class LivePortraitAvatarProvider(AvatarProvider):
             except Exception:
                 pass
 
-        # 3. Load Audio and Compute Exact Lockstep Framing
+        # 3. Load Audio and Compute Exact Lockstep Framing (0.00ms A/V alignment)
         target_sr = 24000
         audio_data, sr = self._load_audio_data(audio_path, target_sr=target_sr)
         aac_frame_size = 1024
-        num_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        min_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        # Align to LCM block multiple of 15 AAC frames = 16 video frames for exact 0.00ms duration delta
+        k_blocks = max(1, int((min_aac_frames + 14) // 15))
+        num_aac_frames = 15 * k_blocks
+        num_frames = 16 * k_blocks
         total_audio_samples = num_aac_frames * aac_frame_size
         audio_dur = total_audio_samples / float(sr)
-
         fps = self.target_fps
-        num_frames = max(1, int(round(audio_dur * fps)))
         samples_per_frame = sr // fps  # 960 samples per video frame for feature extraction
 
         padded_audio = np.zeros(max(total_audio_samples, num_frames * samples_per_frame), dtype=np.float32)
@@ -747,8 +878,8 @@ class LivePortraitAvatarProvider(AvatarProvider):
                 raw_openness[i] = np.clip((low_e / total_e) * (rms / 0.035), 0.0, 1.0)
                 raw_width[i] = np.clip((high_e / total_e) * 1.5 - 0.5, -0.4, 0.6)
 
-        # Smooth envelope across adjacent frames for natural articulation
-        kernel = np.array([0.2, 0.6, 0.2], dtype=np.float32)
+        # Smooth envelope across adjacent frames for natural articulation (5-tap Gaussian filter)
+        kernel = np.array([0.08, 0.25, 0.34, 0.25, 0.08], dtype=np.float32)
         openness_seq = np.convolve(raw_openness, kernel, mode="same")
         width_seq = np.convolve(raw_width, kernel, mode="same")
         rms_seq = np.convolve(raw_rms, kernel, mode="same")
@@ -824,9 +955,16 @@ class LivePortraitAvatarProvider(AvatarProvider):
             rms_val = float(rms_seq[i])
             bl = float(blink_seq[i])
 
-            # A. Mouth & Lip Deformation Field
-            flow_y = (jaw_weight * (8.5 * op) - upper_weight * (2.2 * op)).astype(np.float32)
-            flow_x = (corner_weight * (corner_dir * 3.5 * op)).astype(np.float32)
+            # A. Compute C1-continuous mouth deformation field
+            flow_x, flow_y = self._compute_smooth_deformation_field(
+                grid_x=grid_x,
+                grid_y=grid_y,
+                cx_m=cx_mouth,
+                cy_m=cy_mouth,
+                sc=1.0,
+                op=op,
+                wd=wd
+            )
 
             # B. Eye Blink Eyelid Descent Field
             dy_blink = (10.0 * bl * (eye_weights[0] + eye_weights[1])).astype(np.float32)
@@ -847,14 +985,17 @@ class LivePortraitAvatarProvider(AvatarProvider):
                             if curve_y + 1 < H:
                                 warped[curve_y + 1, x_pos] = (warped[curve_y + 1, x_pos] * 0.70).astype(np.uint8)
 
-            # E. Natural Oral Cavity Depth Shading on Open Vowels (No hardcoded pixel drawing)
-            if op > 0.30:
-                cavity_y = cy_mouth + 2.0
-                cavity_rx = 16.0 * (1.0 + 0.3 * wd)
-                cavity_ry = 6.0 * op
-                cdist = ((grid_x - cx_mouth) / max(1.0, cavity_rx))**2 + ((grid_y - cavity_y) / max(1.0, cavity_ry))**2
-                darken = np.clip(1.0 - cdist, 0.0, 1.0) * (0.35 * op)
-                warped = (warped.astype(np.float32) * (1.0 - darken[:, :, np.newaxis])).astype(np.uint8)
+            # E. Organic Oral Cavity Depth Shading & Enamel Preservation
+            warped = self._apply_organic_oral_cavity_depth(
+                warped=warped,
+                grid_x=grid_x,
+                grid_y=grid_y,
+                cx_m=cx_mouth,
+                cy_m=cy_mouth,
+                sc=1.0,
+                op=op,
+                wd=wd
+            )
 
             # F. Anchored Conversational 3D Head Kinematics
             pitch = float(np.radians(0.8 * np.sin(2.0 * np.pi * 0.35 * t) + 1.2 * min(1.0, rms_val / 0.03)))

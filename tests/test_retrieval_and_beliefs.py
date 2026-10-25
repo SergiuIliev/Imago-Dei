@@ -181,6 +181,122 @@ class TestRetrievalAndBeliefs(unittest.TestCase):
         self.assertIsNotNone(d.get("transcript_segment"))
         self.assertEqual(d["transcript_segment"]["text"], "Testing audio clip binding.")
 
+    def test_dialectical_temporal_beliefs_schema(self):
+        """Verifies supporting_evidence and counter_arguments fields persist and deserialize cleanly."""
+        belief_dialectical = TemporalBelief(
+            id="b-dialectical",
+            topic="Dialectical Systems",
+            belief_statement="Systems must be evaluated through opposing thesis and antithesis.",
+            era_label="Present Day (2026)",
+            approx_year_start=2026,
+            active=True
+        )
+        belief_dialectical.add_supporting_evidence(
+            quote="Corroborated proof of dialectical synthesis.",
+            timestamp_str="2026-08-10",
+            start_seconds=38.5,
+            end_seconds=79.9,
+            source_id="src-001"
+        )
+        belief_dialectical.add_counter_argument(
+            quote="Isolated edge case caveat that must be balanced.",
+            timestamp_str="2026-09-01",
+            start_seconds=79.4,
+            end_seconds=107.8,
+            source_id="src-002"
+        )
+
+        self.db.add_belief(belief_dialectical)
+        retrieved_list = self.db.get_beliefs_for_topic("Dialectical Systems")
+        self.assertEqual(len(retrieved_list), 1)
+        retrieved = retrieved_list[0]
+
+        self.assertEqual(len(retrieved.supporting_evidence), 1)
+        self.assertEqual(retrieved.supporting_evidence[0]["quote"], "Corroborated proof of dialectical synthesis.")
+        self.assertEqual(retrieved.supporting_evidence[0]["timestamp_str"], "2026-08-10")
+        self.assertEqual(retrieved.supporting_evidence[0]["start_seconds"], 38.5)
+
+        self.assertEqual(len(retrieved.counter_arguments), 1)
+        self.assertEqual(retrieved.counter_arguments[0]["quote"], "Isolated edge case caveat that must be balanced.")
+        self.assertEqual(retrieved.counter_arguments[0]["timestamp_str"], "2026-09-01")
+
+    def test_corroborated_evidence_superseding_invariant(self):
+        """
+        Enforces the Invariant:
+        A belief MUST NOT be marked superseded by just a single isolated piece of evidence;
+        it requires corroborated evidence (at least 2 corroborated pieces of evidence).
+        If only 1 outlier piece exists, the belief remains active with an attached caveat/counterargument.
+        """
+        b = TemporalBelief(
+            id="b-invariant-test",
+            topic="Empirical Invariant",
+            belief_statement="Primary hypothesis held firmly.",
+            era_label="2024 Era",
+            active=True
+        )
+
+        # 1. Attempt superseding with 1 isolated piece of evidence -> MUST FAIL to supersede
+        single_evidence = [
+            {"quote": "Single anomaly observed once.", "timestamp_str": "2025-01-01"}
+        ]
+        res1 = b.mark_superseded_with_rule(
+            newer_belief_id="b-newer",
+            reason="Observed single outlier anomaly.",
+            transition_evidence=single_evidence
+        )
+        self.assertFalse(res1, "Must refuse to supersede belief with only 1 isolated evidence piece")
+        self.assertTrue(b.active, "Belief must remain active")
+        self.assertIsNone(b.superseded_by_id, "superseded_by_id must remain None")
+        self.assertEqual(len(b.counter_arguments), 1, "Outlier must be attached to counter_arguments")
+        self.assertIn("Isolated Outlier Caveat", b.counter_arguments[0]["quote"])
+
+        # 2. Attempt superseding with >= 2 corroborated pieces of evidence -> MUST SUCCEED
+        corroborated_evidence = [
+            {"quote": "First corroborated proof of paradigm breakdown.", "timestamp_str": "2025-06-01"},
+            {"quote": "Second independent confirmation under stress.", "timestamp_str": "2025-09-15"}
+        ]
+        res2 = b.mark_superseded_with_rule(
+            newer_belief_id="b-newer",
+            reason="Multiple corroborated observations proved old approach brittle.",
+            transition_evidence=corroborated_evidence
+        )
+        self.assertTrue(res2, "Must succeed when corroborated evidence >= 2")
+        self.assertFalse(b.active, "Belief must now be marked inactive / superseded")
+        self.assertEqual(b.superseded_by_id, "b-newer")
+        self.assertGreaterEqual(len(b.supporting_evidence), 2)
+
+    def test_dialectical_system_prompt_formatting(self):
+        """Verifies format_dialectical_beliefs outputs timestamps, quotes, and dialectical nuances."""
+        b = TemporalBelief(
+            id="b-prompt-test",
+            topic="Simplicity",
+            belief_statement="Simplicity is complexity resolved.",
+            era_label="Present Day (2026)",
+            active=True,
+            supporting_evidence=[{
+                "quote": "Constantin Brâncuși quote on simplicity.",
+                "timestamp_str": "2026-08-10",
+                "start_seconds": 38.53,
+                "end_seconds": 79.95,
+                "source_id": "b0b95788"
+            }],
+            counter_arguments=[{
+                "quote": "Must first master underlying architectural complexity.",
+                "timestamp_str": "2026-08-10",
+                "start_seconds": 0.0,
+                "end_seconds": 38.53,
+                "source_id": "b0b95788"
+            }]
+        )
+        formatted = self.personality.format_dialectical_beliefs([b])
+        self.assertIn("DIALECTICAL TEMPORAL BELIEFS", formatted)
+        self.assertIn("Simplicity is complexity resolved", formatted)
+        self.assertIn("ACTIVE", formatted)
+        self.assertIn("Constantin Brâncuși quote", formatted)
+        self.assertIn("2026-08-10", formatted)
+        self.assertIn("38.53s-79.95s", formatted)
+        self.assertIn("Must first master underlying architectural complexity", formatted)
+
 
 if __name__ == "__main__":
     unittest.main()

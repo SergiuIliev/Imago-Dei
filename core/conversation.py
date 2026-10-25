@@ -200,10 +200,7 @@ class ConversationEngine:
 
         beliefs_summary = ""
         if beliefs_list:
-            beliefs_summary = "HISTORICAL BELIEFS EVOLUTION ON THIS TOPIC:\n"
-            for b in beliefs_list:
-                status_str = "Active" if b.active else f"Superseded (Reason: {b.reason_for_change or 'Not specified'})"
-                beliefs_summary += f"- [{b.era_label}] {b.topic}: \"{b.belief_statement}\" (Status: {status_str})\n"
+            beliefs_summary = self.personality.format_dialectical_beliefs(beliefs_list)
 
         # 7. Build system prompt
         system_prompt = self.personality.build_system_prompt(

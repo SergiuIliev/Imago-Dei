@@ -133,10 +133,29 @@ class MemoryItem:
 
 
 @dataclass
+class BeliefEvidence:
+    """Timestamped grounded evidence or dialectical counterargument for a belief."""
+    quote: str = ""
+    timestamp_str: Optional[str] = None   # e.g. "2026-08-10" or "2026-09-06 14:30:00"
+    start_seconds: Optional[float] = None
+    end_seconds: Optional[float] = None
+    source_id: Optional[str] = None
+    memory_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BeliefEvidence:
+        return cls(**data)
+
+
+@dataclass
 class TemporalBelief:
     """
     A specific belief, value, or preference held during a defined time window.
-    Crucial for preserving historical viewpoints even when superseded later.
+    Crucial for preserving historical viewpoints and dialectical evolution.
+    Stores timestamped supporting evidence and dialectical counterarguments.
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     topic: str = ""
@@ -150,9 +169,18 @@ class TemporalBelief:
     active: bool = True
     reason_for_change: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    supporting_evidence: List[Dict[str, Any]] = field(default_factory=list)
+    counter_arguments: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d['supporting_evidence'] = [
+            e.to_dict() if hasattr(e, 'to_dict') else e for e in self.supporting_evidence
+        ]
+        d['counter_arguments'] = [
+            c.to_dict() if hasattr(c, 'to_dict') else c for c in self.counter_arguments
+        ]
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> TemporalBelief:
@@ -162,9 +190,107 @@ class TemporalBelief:
                 data_copy['evidence_memory_ids'] = json.loads(data_copy['evidence_memory_ids'])
             except Exception:
                 data_copy['evidence_memory_ids'] = []
+        if isinstance(data_copy.get('supporting_evidence'), str):
+            try:
+                data_copy['supporting_evidence'] = json.loads(data_copy['supporting_evidence'])
+            except Exception:
+                data_copy['supporting_evidence'] = []
+        elif data_copy.get('supporting_evidence') is None:
+            data_copy['supporting_evidence'] = []
+
+        if isinstance(data_copy.get('counter_arguments'), str):
+            try:
+                data_copy['counter_arguments'] = json.loads(data_copy['counter_arguments'])
+            except Exception:
+                data_copy['counter_arguments'] = []
+        elif data_copy.get('counter_arguments') is None:
+            data_copy['counter_arguments'] = []
+
         if isinstance(data_copy.get('active'), int):
             data_copy['active'] = bool(data_copy['active'])
         return cls(**data_copy)
+
+    def add_supporting_evidence(
+        self,
+        quote: str,
+        timestamp_str: Optional[str] = None,
+        start_seconds: Optional[float] = None,
+        end_seconds: Optional[float] = None,
+        source_id: Optional[str] = None,
+        memory_id: Optional[str] = None
+    ) -> None:
+        """Appends a timestamped evidence object and ensures memory_id is tracked."""
+        ev = {
+            "quote": quote,
+            "timestamp_str": timestamp_str,
+            "start_seconds": start_seconds,
+            "end_seconds": end_seconds,
+            "source_id": source_id,
+            "memory_id": memory_id
+        }
+        self.supporting_evidence.append(ev)
+        if memory_id and memory_id not in self.evidence_memory_ids:
+            self.evidence_memory_ids.append(memory_id)
+
+    def add_counter_argument(
+        self,
+        quote: str,
+        timestamp_str: Optional[str] = None,
+        start_seconds: Optional[float] = None,
+        end_seconds: Optional[float] = None,
+        source_id: Optional[str] = None,
+        memory_id: Optional[str] = None
+    ) -> None:
+        """Appends a dialectical counterargument or caveat object with timestamps."""
+        ca = {
+            "quote": quote,
+            "timestamp_str": timestamp_str,
+            "start_seconds": start_seconds,
+            "end_seconds": end_seconds,
+            "source_id": source_id,
+            "memory_id": memory_id
+        }
+        self.counter_arguments.append(ca)
+
+    def mark_superseded_with_rule(
+        self,
+        newer_belief_id: str,
+        reason: str,
+        transition_evidence: Optional[List[Dict[str, Any]]] = None
+    ) -> bool:
+        """
+        Enforces the Corroborated Evidence Invariant:
+        A belief MUST NOT be marked superseded by just a single isolated piece of evidence;
+        it requires corroborated evidence (at least 2 corroborated pieces of evidence).
+        If only 1 outlier piece exists, the belief remains active with an attached
+        caveat/counterargument rather than being superseded.
+        """
+        evidence_items = list(transition_evidence or [])
+        total_pieces = len(evidence_items)
+
+        if total_pieces >= 2:
+            # Corroborated evidence threshold met: properly mark superseded
+            self.active = False
+            self.superseded_by_id = newer_belief_id
+            self.reason_for_change = reason
+            for ev in evidence_items:
+                if ev not in self.supporting_evidence:
+                    self.supporting_evidence.append(ev)
+            return True
+        elif total_pieces == 1:
+            # Isolated outlier: remain active, attach as dialectical caveat/counterargument
+            self.active = True
+            self.superseded_by_id = None
+            outlier = evidence_items[0]
+            outlier_caveat = dict(outlier)
+            if "quote" in outlier_caveat and not outlier_caveat["quote"].startswith("[Isolated Outlier Caveat]"):
+                outlier_caveat["quote"] = f"[Isolated Outlier Caveat] {outlier_caveat['quote']}"
+            if outlier_caveat not in self.counter_arguments:
+                self.counter_arguments.append(outlier_caveat)
+            return False
+        else:
+            # Zero evidence provided: do not supersede without evidence
+            return False
 
 
 @dataclass

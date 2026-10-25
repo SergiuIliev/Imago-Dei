@@ -114,6 +114,27 @@ class TestMemoryPersistence(unittest.TestCase):
         self.assertEqual(len(corrections), 1)
         self.assertEqual(corrections[0].correction_reason, "Clarifying exact phrasing")
 
+    def test_direct_verify_memory(self):
+        """Verifies directly promoting an unverified memory to personal_verified without modifying content."""
+        mem = MemoryItem(
+            id="mem-to-verify-direct",
+            content="Direct verification test content.",
+            summary="Direct verification summary",
+            verification_status=VerificationStatus.EXTRACTED_UNVERIFIED
+        )
+        self.db.add_memory(mem)
+
+        # Direct verify
+        success = self.db.verify_memory("mem-to-verify-direct")
+        self.assertTrue(success)
+
+        updated = self.db.get_memory("mem-to-verify-direct")
+        self.assertEqual(updated.verification_status, VerificationStatus.PERSONAL_VERIFIED)
+        self.assertEqual(updated.content, "Direct verification test content.")
+
+        # Nonexistent returns False
+        self.assertFalse(self.db.verify_memory("nonexistent-id"))
+
 
 if __name__ == "__main__":
     unittest.main()
