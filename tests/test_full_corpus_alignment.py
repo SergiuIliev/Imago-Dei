@@ -195,6 +195,38 @@ class TestFullCorpusAlignment(unittest.TestCase):
         self.assertTrue(Path(job.output_video_path).exists())
         self.assertGreater(Path(job.output_video_path).stat().st_size, 100000)
 
+    def test_07_omniscient_time_capsule_multi_year_synthesis(self):
+        """Invariant 6: Validates Omniscient Mode (all_eras) unconstrained retrieval and persona resolution."""
+        # 1. Snapshot resolution
+        snap = self.personality.get_snapshot("all_eras")
+        self.assertIsNotNone(snap)
+        self.assertEqual(snap.era_id, "all_eras")
+        self.assertIn("Omniscient", snap.era_name)
+
+        # 2. Aliases resolution
+        self.assertEqual(self.personality.get_snapshot("panoramic").era_id, "all_eras")
+        self.assertEqual(self.personality.get_snapshot("omniscient").era_id, "all_eras")
+
+        # 3. Unconstrained hybrid retrieval across multiple years
+        evidence, has_evidence = self.retrieval.retrieve(
+            query="How did your speaking practice and habits progress from 2023 through 2026?",
+            limit=5,
+            era_filter="all_eras"
+        )
+        self.assertTrue(has_evidence)
+        self.assertGreaterEqual(len(evidence), 2)
+        dates = [e.memory.date_occurred for e in evidence if e.memory.date_occurred]
+        self.assertGreaterEqual(len(dates), 1)
+
+        # 4. Avatar era resolution for omniscient mode defaults to contemporary 2026
+        avatar = LivePortraitAvatarProvider()
+        norm = avatar.normalize_era_id("all_eras")
+        self.assertEqual(norm, "2026")
+        portrait = avatar.resolve_reference_portrait(None, era_id="all_eras")
+        driving = avatar.resolve_driving_video(None, era_id="all_eras")
+        self.assertTrue(os.path.exists(portrait))
+        self.assertTrue(os.path.exists(driving))
+
 
 if __name__ == "__main__":
     unittest.main()

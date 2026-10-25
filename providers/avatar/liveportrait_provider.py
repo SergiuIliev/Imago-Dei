@@ -38,6 +38,9 @@ ERA_MAP: Dict[str, str] = {
     "era_2026": "2026",
     "2026": "2026",
     "present": "2026",
+    "all_eras": "2026",
+    "panoramic": "2026",
+    "omniscient": "2026",
 }
 
 
@@ -79,6 +82,7 @@ class LivePortraitAvatarProvider(AvatarProvider):
 
         # In-memory frame cache for driving loops to eliminate disk I/O on repeated calls
         self._driving_loop_cache: Dict[str, List[np.ndarray]] = {}
+        self._mouth_anchor_cache: Dict[str, List[Tuple[float, float, float]]] = {}
         self._jobs: Dict[str, AvatarRenderJob] = {}
 
     def is_healthy(self) -> bool:
@@ -221,6 +225,71 @@ class LivePortraitAvatarProvider(AvatarProvider):
 
         self._driving_loop_cache[video_path] = frames
         return frames
+
+    def _get_driving_loop_mouth_anchors(
+        self,
+        video_path: str,
+        frames: List[np.ndarray],
+        era_id: Optional[str] = None
+    ) -> List[Tuple[float, float, float]]:
+        """
+        Dynamically tracks face bounding box and mouth anchors (cx, cy, scale)
+        across each frame of the driving loop with exponential moving average smoothing.
+        Prevents facial tearing when head nods or sways.
+        """
+        if not hasattr(self, "_mouth_anchor_cache"):
+            self._mouth_anchor_cache = {}
+        if video_path in self._mouth_anchor_cache:
+            return self._mouth_anchor_cache[video_path]
+
+        norm_era = self.normalize_era_id(era_id)
+        era_priors = {
+            "2023": (256.0, 304.0, 1.05),
+            "2024": (254.0, 306.0, 1.05),
+            "2025": (256.0, 304.0, 1.05),
+            "2026": (245.0, 305.0, 1.05),
+        }
+        default_cx, default_cy, default_sc = era_priors.get(norm_era or "2026", (256.0, 304.0, 1.05))
+
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        fc = cv2.CascadeClassifier(cascade_path) if os.path.exists(cascade_path) else None
+
+        raw_coords: List[Optional[Tuple[float, float, float]]] = []
+        for frame in frames:
+            if fc is not None:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                det = fc.detectMultiScale(gray, 1.05, 3, minSize=(60, 60))
+                valid = [b for b in det if abs(b[0] + b[2] / 2.0 - 256) < 120 and abs(b[1] + b[3] / 2.0 - 220) < 120]
+                if valid:
+                    best = min(valid, key=lambda b: (b[0] + b[2] / 2.0 - 256)**2 + (b[1] + b[3] / 2.0 - 220)**2)
+                    fx, fy, fw, fh = best
+                    cx = float(fx + fw / 2.0)
+                    cy = float(fy + 0.77 * fh)
+                    sc = float(fw / 256.0)
+                    raw_coords.append((cx, cy, sc))
+                    continue
+            raw_coords.append(None)
+
+        known = [c for c in raw_coords if c is not None]
+        med_cx = float(np.median([c[0] for c in known])) if known else default_cx
+        med_cy = float(np.median([c[1] for c in known])) if known else default_cy
+        med_sc = float(np.median([c[2] for c in known])) if known else default_sc
+
+        # Smooth using forward-backward EMA to eliminate jitter while faithfully following head motion
+        smooth: List[Tuple[float, float, float]] = []
+        curr = (med_cx, med_cy, med_sc)
+        alpha = 0.20
+        for c in raw_coords:
+            tgt = c if c is not None else curr
+            curr = (
+                alpha * tgt[0] + (1.0 - alpha) * curr[0],
+                alpha * tgt[1] + (1.0 - alpha) * curr[1],
+                alpha * tgt[2] + (1.0 - alpha) * curr[2],
+            )
+            smooth.append(curr)
+
+        self._mouth_anchor_cache[video_path] = smooth
+        return smooth
 
     def create_render_job(
         self,
@@ -405,11 +474,15 @@ class LivePortraitAvatarProvider(AvatarProvider):
 
         # 1. Load Audio and Compute Exact Lockstep Framing
         audio_data, sr = self._load_audio_data(audio_path, target_sr=target_sr)
-        samples_per_frame = sr // fps  # Exactly 960 samples per frame for 24kHz at 25 FPS
-        num_frames = max(1, int(np.ceil(len(audio_data) / samples_per_frame)))
-        total_samples = num_frames * samples_per_frame
+        aac_frame_size = 1024
+        num_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        total_audio_samples = num_aac_frames * aac_frame_size
+        audio_dur = total_audio_samples / float(sr)
 
-        padded_audio = np.zeros(total_samples, dtype=np.float32)
+        num_frames = max(1, int(round(audio_dur * fps)))
+        samples_per_frame = sr // fps  # 960 samples per video frame for feature extraction
+
+        padded_audio = np.zeros(max(total_audio_samples, num_frames * samples_per_frame), dtype=np.float32)
         padded_audio[:len(audio_data)] = audio_data
 
         # 2. Continuous Acoustic Feature Extraction (RMS & Formants -> Visemes)
@@ -441,67 +514,15 @@ class LivePortraitAvatarProvider(AvatarProvider):
         width_seq = np.convolve(raw_width, kernel, mode="same")
         rms_seq = np.convolve(raw_rms, kernel, mode="same")
 
-        # 3. Load Driving Video Frames
+        # 3. Load Driving Video Frames & Dynamic Mouth Anchors
         driving_frames = self._load_driving_loop_frames(driving_video_path)
+        mouth_anchors = self._get_driving_loop_mouth_anchors(driving_video_path, driving_frames, era_id=era_id)
         L = len(driving_frames)
+        crossfade_len = min(6, L // 4)
 
-        # 4. Calibrate Face Geometry & Mouth Anchor for driving loop
-        norm_era = self.normalize_era_id(era_id)
-        # Prior mouth centers calibrated per era loop
-        era_priors = {
-            "2023": (255.0, 296.0, 270.0),
-            "2024": (258.0, 296.0, 280.0),
-            "2025": (257.0, 296.0, 270.0),
-            "2026": (256.0, 300.0, 270.0),
-        }
-        cx_mouth, cy_mouth, face_w = era_priors.get(norm_era or "2026", (256.0, 298.0, 270.0))
-
-        # Check first frame with Haar face cascade for dynamic fine-tuning
-        try:
-            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-            if os.path.exists(cascade_path):
-                fc = cv2.CascadeClassifier(cascade_path)
-                gray_first = cv2.cvtColor(driving_frames[0], cv2.COLOR_BGR2GRAY)
-                detected = fc.detectMultiScale(gray_first, 1.05, 3, minSize=(160, 160))
-                valid_boxes = [
-                    b for b in detected
-                    if abs((b[0] + b[2] / 2.0) - 256.0) < 60 and abs((b[1] + b[3] / 2.0) - 220.0) < 60
-                ]
-                if valid_boxes:
-                    best = min(valid_boxes, key=lambda b: (b[0] + b[2] / 2.0 - 256)**2 + (b[1] + b[3] / 2.0 - 220)**2)
-                    fx, fy, fw, fh = best
-                    cx_mouth = float(fx + fw / 2.0)
-                    cy_mouth = float(fy + 0.76 * fh)
-                    face_w = float(fw)
-        except Exception:
-            pass
-
-        # 5. Spatial Deformation Fields & Gaussian Alpha Blending Mask
         grid_y, grid_x = np.indices((H, W), dtype=np.float32)
-        scale = face_w / 256.0
 
-        sigma_x_jaw = 36.0 * scale
-        sigma_y_jaw = 42.0 * scale
-        r_x = (grid_x - cx_mouth) / sigma_x_jaw
-        r_y = np.maximum(0.0, (grid_y - cy_mouth) / sigma_y_jaw)
-        jaw_weight = (np.exp(-0.5 * (r_x**2 + r_y**2)) * (grid_y >= cy_mouth)).astype(np.float32)
-
-        r_y_up = np.maximum(0.0, (cy_mouth - grid_y) / (12.0 * scale))
-        upper_weight = (np.exp(-0.5 * (r_x**2 + r_y_up**2)) * (grid_y < cy_mouth)).astype(np.float32)
-
-        corner_dist_x = (np.abs(grid_x - cx_mouth) - 24.0 * scale) / 12.0
-        corner_dist_y = (grid_y - cy_mouth) / 10.0
-        corner_weight = np.exp(-0.5 * (corner_dist_x**2 + corner_dist_y**2)).astype(np.float32)
-        corner_dir = np.sign(grid_x - cx_mouth).astype(np.float32)
-
-        # Smooth 2D Gaussian alpha blend mask onto the lower face
-        sigma_blend_x = 46.0 * scale
-        sigma_blend_y = 54.0 * scale
-        blend_dist = ((grid_x - cx_mouth) / sigma_blend_x)**2 + ((grid_y - (cy_mouth + 8.0 * scale)) / sigma_blend_y)**2
-        gaussian_mask = np.clip(np.exp(-0.5 * blend_dist), 0.0, 1.0).astype(np.float32)
-        gaussian_mask_3c = np.repeat(gaussian_mask[:, :, np.newaxis], 3, axis=2)
-
-        # 6. Setup PyAV Output Container (H.264 Video + 24kHz AAC Audio)
+        # 4. Setup PyAV Output Container (H.264 Video + 24kHz AAC Audio)
         out_container = av.open(output_path, "w", format="mp4")
 
         v_stream = None
@@ -523,21 +544,50 @@ class LivePortraitAvatarProvider(AvatarProvider):
         v_stream.pix_fmt = "yuv420p"
 
         a_stream = out_container.add_stream("aac", rate=sr, layout="mono")
+        all_packets: List[av.Packet] = []
 
-        # 7. Interleaved Lockstep Frame Generation Loop
-        cycle_len = max(1, 2 * (L - 1))
-        tooth_val = np.array([170, 185, 200], dtype=np.float32)
-
+        # 5. Forward-Only Looping Frame Generation Loop
         for i in range(num_frames):
-            # Ping-pong continuous looping index to guarantee zero boundary jump cuts
-            pos = i % cycle_len
-            frame_idx = pos if pos < L else cycle_len - pos
-            base_frame = driving_frames[frame_idx]
+            loop_pos = i % L
+            base_frame = driving_frames[loop_pos]
+            cx_m, cy_m, sc = mouth_anchors[loop_pos]
+
+            # Seamless forward loop boundary cosine crossfade
+            if loop_pos >= L - crossfade_len:
+                cf_ratio = float(loop_pos - (L - crossfade_len)) / float(crossfade_len)
+                blend_w = float(0.5 * (1.0 - math.cos(math.pi * cf_ratio)))
+                wrap_pos = loop_pos - (L - crossfade_len)
+                base_frame = cv2.addWeighted(base_frame, 1.0 - blend_w, driving_frames[wrap_pos], blend_w, 0.0)
+                wrap_cx, wrap_cy, wrap_sc = mouth_anchors[wrap_pos]
+                cx_m = (1.0 - blend_w) * cx_m + blend_w * wrap_cx
+                cy_m = (1.0 - blend_w) * cy_m + blend_w * wrap_cy
+                sc = (1.0 - blend_w) * sc + blend_w * wrap_sc
 
             op = float(openness_seq[i])
             wd = float(width_seq[i])
 
-            # Compute optical flow displacement field
+            # Dynamic spatial deformation fields centered on moving mouth
+            sigma_x_jaw = 34.0 * sc
+            sigma_y_jaw = 40.0 * sc
+            r_x = (grid_x - cx_m) / sigma_x_jaw
+            r_y = np.maximum(0.0, (grid_y - cy_m) / sigma_y_jaw)
+            jaw_weight = (np.exp(-0.5 * (r_x**2 + r_y**2)) * (grid_y >= cy_m)).astype(np.float32)
+
+            r_y_up = np.maximum(0.0, (cy_m - grid_y) / (12.0 * sc))
+            upper_weight = (np.exp(-0.5 * (r_x**2 + r_y_up**2)) * (grid_y < cy_m)).astype(np.float32)
+
+            corner_dist_x = (np.abs(grid_x - cx_m) - 24.0 * sc) / 12.0
+            corner_dist_y = (grid_y - cy_m) / 10.0
+            corner_weight = np.exp(-0.5 * (corner_dist_x**2 + corner_dist_y**2)).astype(np.float32)
+            corner_dir = np.sign(grid_x - cx_m).astype(np.float32)
+
+            # Dynamic Gaussian Alpha Blend Mask centered on moving lower face
+            sigma_blend_x = 44.0 * sc
+            sigma_blend_y = 52.0 * sc
+            blend_dist = ((grid_x - cx_m) / sigma_blend_x)**2 + ((grid_y - (cy_m + 6.0 * sc)) / sigma_blend_y)**2
+            gaussian_mask = np.clip(np.exp(-0.5 * blend_dist), 0.0, 1.0).astype(np.float32)
+            gaussian_mask_3c = np.repeat(gaussian_mask[:, :, np.newaxis], 3, axis=2)
+
             flow_y = (jaw_weight * (9.0 * op) - upper_weight * (2.4 * op)).astype(np.float32)
             flow_x = (corner_weight * (corner_dir * (3.5 * op + 5.0 * wd * op))).astype(np.float32)
 
@@ -545,17 +595,14 @@ class LivePortraitAvatarProvider(AvatarProvider):
             map_y = grid_y - flow_y
             warped = cv2.remap(base_frame, map_x, map_y, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REFLECT)
 
-            # Oral Cavity Shading & Natural Tooth Enamel Highlight on Open Vowels
-            if op > 0.32:
-                half_w = int(round(16.0 * scale))
-                for x in range(int(cx_mouth - half_w), int(cx_mouth + half_w + 1)):
-                    curve = 1.0 - ((x - cx_mouth) / max(1.0, half_w))**2
-                    if curve > 0:
-                        ty = int(cy_mouth + 0.5 * op)
-                        alpha_t = 0.45 * op * curve
-                        curr = warped[ty : ty + 2, x].astype(np.float32)
-                        blended = (1.0 - alpha_t) * curr + alpha_t * tooth_val
-                        warped[ty : ty + 2, x] = np.clip(blended, 0, 255).astype(np.uint8)
+            # Natural Oral Cavity Depth Shading on Open Vowels (No hardcoded pixel drawing)
+            if op > 0.30:
+                cavity_y = cy_m + 2.0 * sc
+                cavity_rx = 16.0 * sc * (1.0 + 0.3 * wd)
+                cavity_ry = 6.0 * sc * op
+                cdist = ((grid_x - cx_m) / max(1.0, cavity_rx))**2 + ((grid_y - cavity_y) / max(1.0, cavity_ry))**2
+                darken = np.clip(1.0 - cdist, 0.0, 1.0) * (0.35 * op)
+                warped = (warped.astype(np.float32) * (1.0 - darken[:, :, np.newaxis])).astype(np.uint8)
 
             # Smooth Gaussian alpha blend onto the base driving video frame
             speech_act = float(np.clip(3.0 * op, 0.0, 1.0))
@@ -568,20 +615,35 @@ class LivePortraitAvatarProvider(AvatarProvider):
             vf = av.VideoFrame.from_ndarray(rgb_frame, format="rgb24")
             vf.pts = i
             for packet in v_stream.encode(vf):
-                out_container.mux(packet)
+                all_packets.append(packet)
 
-            # Encode Audio Chunk (Lockstep 960 samples per video frame)
-            chunk = padded_audio[i * samples_per_frame : (i + 1) * samples_per_frame]
+        # 6. Encode Audio in Standard 1024-sample AAC Frames
+        aac_frame_size = 1024
+        for sample_start in range(0, total_audio_samples, aac_frame_size):
+            chunk = padded_audio[sample_start : sample_start + aac_frame_size]
+            if len(chunk) < aac_frame_size:
+                chunk = np.pad(chunk, (0, aac_frame_size - len(chunk)))
             af = av.AudioFrame.from_ndarray(chunk.reshape(1, -1), format="flt", layout="mono")
             af.sample_rate = sr
-            af.pts = i * samples_per_frame
+            af.pts = sample_start
             for packet in a_stream.encode(af):
-                out_container.mux(packet)
+                all_packets.append(packet)
 
-        # Flush encoders and finalize MP4 container
+        # 7. Flush Encoders
         for packet in v_stream.encode():
-            out_container.mux(packet)
+            all_packets.append(packet)
         for packet in a_stream.encode():
+            all_packets.append(packet)
+
+        # 8. Monotonic Timestamp Sorting & Muxing (Sub-millisecond A/V sync)
+        def get_packet_dts(pkt):
+            dts = pkt.dts if pkt.dts is not None else pkt.pts
+            if dts is None:
+                return 0.0
+            return float(dts * pkt.time_base)
+
+        all_packets.sort(key=get_packet_dts)
+        for packet in all_packets:
             out_container.mux(packet)
 
         out_container.close()
@@ -650,13 +712,16 @@ class LivePortraitAvatarProvider(AvatarProvider):
         # 3. Load Audio and Compute Exact Lockstep Framing
         target_sr = 24000
         audio_data, sr = self._load_audio_data(audio_path, target_sr=target_sr)
+        aac_frame_size = 1024
+        num_aac_frames = max(1, int(math.ceil(len(audio_data) / aac_frame_size)))
+        total_audio_samples = num_aac_frames * aac_frame_size
+        audio_dur = total_audio_samples / float(sr)
 
         fps = self.target_fps
-        samples_per_frame = sr // fps  # Exactly 960 samples per frame for 24kHz at 25 FPS
-        num_frames = max(1, int(np.ceil(len(audio_data) / samples_per_frame)))
-        total_samples = num_frames * samples_per_frame
+        num_frames = max(1, int(round(audio_dur * fps)))
+        samples_per_frame = sr // fps  # 960 samples per video frame for feature extraction
 
-        padded_audio = np.zeros(total_samples, dtype=np.float32)
+        padded_audio = np.zeros(max(total_audio_samples, num_frames * samples_per_frame), dtype=np.float32)
         padded_audio[:len(audio_data)] = audio_data
 
         # 4. Continuous Acoustic Feature Extraction (RMS & Formants -> Visemes)
@@ -749,6 +814,7 @@ class LivePortraitAvatarProvider(AvatarProvider):
         v_stream.pix_fmt = "yuv420p"
 
         a_stream = out_container.add_stream("aac", rate=sr, layout="mono")
+        all_packets: List[av.Packet] = []
 
         # 8. Interleaved Lockstep Frame Generation Loop
         for i in range(num_frames):
@@ -781,17 +847,14 @@ class LivePortraitAvatarProvider(AvatarProvider):
                             if curve_y + 1 < H:
                                 warped[curve_y + 1, x_pos] = (warped[curve_y + 1, x_pos] * 0.70).astype(np.uint8)
 
-            # E. Oral Cavity Shading & Natural Tooth Enamel Highlight on Open Vowels
-            if op > 0.35:
-                for x in range(int(cx_mouth - 14), int(cx_mouth + 15)):
-                    curve = 1.0 - ((x - cx_mouth) / 15.0)**2
-                    if curve > 0:
-                        ty = int(cy_mouth + 0.5 * op)
-                        alpha = 0.45 * op * curve
-                        curr = warped[ty : ty + 2, x].astype(np.float32)
-                        tooth_val = np.array([170, 185, 200], dtype=np.float32)
-                        blended = (1.0 - alpha) * curr + alpha * tooth_val
-                        warped[ty : ty + 2, x] = np.clip(blended, 0, 255).astype(np.uint8)
+            # E. Natural Oral Cavity Depth Shading on Open Vowels (No hardcoded pixel drawing)
+            if op > 0.30:
+                cavity_y = cy_mouth + 2.0
+                cavity_rx = 16.0 * (1.0 + 0.3 * wd)
+                cavity_ry = 6.0 * op
+                cdist = ((grid_x - cx_mouth) / max(1.0, cavity_rx))**2 + ((grid_y - cavity_y) / max(1.0, cavity_ry))**2
+                darken = np.clip(1.0 - cdist, 0.0, 1.0) * (0.35 * op)
+                warped = (warped.astype(np.float32) * (1.0 - darken[:, :, np.newaxis])).astype(np.uint8)
 
             # F. Anchored Conversational 3D Head Kinematics
             pitch = float(np.radians(0.8 * np.sin(2.0 * np.pi * 0.35 * t) + 1.2 * min(1.0, rms_val / 0.03)))
@@ -819,20 +882,35 @@ class LivePortraitAvatarProvider(AvatarProvider):
             vf = av.VideoFrame.from_ndarray(rgb_frame, format="rgb24")
             vf.pts = i
             for packet in v_stream.encode(vf):
-                out_container.mux(packet)
+                all_packets.append(packet)
 
-            # H. Encode Audio Chunk (Lockstep 960 samples per video frame)
-            chunk = padded_audio[i * samples_per_frame : (i + 1) * samples_per_frame]
+        # Encode Audio in Standard 1024-sample AAC Frames
+        aac_frame_size = 1024
+        for sample_start in range(0, total_audio_samples, aac_frame_size):
+            chunk = padded_audio[sample_start : sample_start + aac_frame_size]
+            if len(chunk) < aac_frame_size:
+                chunk = np.pad(chunk, (0, aac_frame_size - len(chunk)))
             af = av.AudioFrame.from_ndarray(chunk.reshape(1, -1), format="flt", layout="mono")
             af.sample_rate = sr
-            af.pts = i * samples_per_frame
+            af.pts = sample_start
             for packet in a_stream.encode(af):
-                out_container.mux(packet)
+                all_packets.append(packet)
 
         # Flush encoders and finalize MP4 container
         for packet in v_stream.encode():
-            out_container.mux(packet)
+            all_packets.append(packet)
         for packet in a_stream.encode():
+            all_packets.append(packet)
+
+        # Monotonic Timestamp Sorting & Muxing
+        def get_packet_dts(pkt):
+            dts = pkt.dts if pkt.dts is not None else pkt.pts
+            if dts is None:
+                return 0.0
+            return float(dts * pkt.time_base)
+
+        all_packets.sort(key=get_packet_dts)
+        for packet in all_packets:
             out_container.mux(packet)
 
         out_container.close()

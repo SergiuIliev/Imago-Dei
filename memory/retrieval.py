@@ -172,10 +172,12 @@ class HybridRetrievalProvider:
     def _matches_era(self, date_occurred: Optional[str], era_filter: Optional[str]) -> bool:
         if not era_filter:
             return True
+        filter_clean = era_filter.strip().lower()
+        if filter_clean in ("all", "all_eras", "all-eras", "panoramic", "omniscient", "none"):
+            return True
         if not date_occurred:
             return False
 
-        filter_clean = era_filter.strip().lower()
         date_clean = date_occurred.strip().lower()
 
         # Extract 4-digit years from date_occurred

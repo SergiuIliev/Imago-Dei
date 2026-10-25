@@ -167,11 +167,15 @@ class ConversationEngine:
                 retrieval_query = f"{last_assistant} {query}".strip()
 
         # 4. Retrieve grounded memory evidence
+        effective_era_filter = None
+        if active_era and active_era.era_id not in ("all_eras", "panoramic", "omniscient"):
+            effective_era_filter = active_era.time_period
+
         evidence_list, has_evidence = self.retrieval.retrieve(
             query=retrieval_query,
             limit=5,
             status_filter=verification_filter,
-            era_filter=active_era.time_period if active_era else None
+            era_filter=effective_era_filter
         )
 
         # 5. Retrieve relevant temporal beliefs using enhanced FTS5 matching

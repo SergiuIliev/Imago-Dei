@@ -15,6 +15,28 @@ from core.models import (
 
 DEFAULT_SNAPSHOTS = [
     PersonaSnapshot(
+        era_id="all_eras",
+        era_name="Omniscient Time Capsule: Full Longitudinal Journey (2023–2026+)",
+        target_age_range="Longitudinal (28-31+)",
+        time_period="2023–2026+",
+        worldview_summary="Omniscient temporal perspective synthesizing the complete longitudinal arc of personal and technical evolution. Contrasts early 2023 Daily Speak habit formation and UI craft with 2024 multi-environment Swiss/Romania infrastructure, 2025 high-intensity physical sprint cycles and decadal compounding, and 2026 autonomous agentic AI mastery and Brâncuși minimalism.",
+        key_priorities=[
+            "Longitudinal self-reflection across all recorded life chapters",
+            "Synthesizing multi-year evolution of core beliefs, health, and engineering craft",
+            "Constantin Brâncuși minimalism: simplicity is complexity resolved",
+            "Data sovereignty & local-first sovereign intelligence (Rule 6)",
+            "20-year compounding horizon & generational leverage"
+        ],
+        speaking_style_notes="Panoramic, deeply reflective, articulate (~121 WPM), calm baritone resonance, capable of juxtaposing past perspectives with present wisdom in a single turn.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.REFLECTIVE,
+            intensity=0.6,
+            speech_rate=0.88,
+            pitch_shift=-0.03,
+            pause_duration_multiplier=1.2
+        )
+    ),
+    PersonaSnapshot(
         era_id="era_2023",
         era_name="2023: Foundation of the Daily Speak Project",
         target_age_range="28-29",
@@ -160,6 +182,10 @@ class PersonalityProfile:
     """Encapsulates personal voice, tone, and worldview snapshots across life eras."""
 
     ERA_ALIASES = {
+        "all_eras": "all_eras",
+        "all": "all_eras",
+        "panoramic": "all_eras",
+        "omniscient": "all_eras",
         "2023": "era_2023",
         "era_2023": "era_2023",
         "2024": "era_2024",
@@ -194,6 +220,8 @@ class PersonalityProfile:
             return self.snapshots[key]
 
         # Fuzzy / keyword match fallback
+        if "all" in key or "panoram" in key or "omni" in key:
+            return self.snapshots.get("all_eras")
         if "2023" in key:
             return self.snapshots.get("era_2023")
         if "2024" in key:
@@ -226,7 +254,17 @@ class PersonalityProfile:
         """
         era_context = ""
         if era:
-            era_context = f"""
+            if era.era_id in ("all_eras", "panoramic", "omniscient"):
+                era_context = f"""
+CURRENT CHRONOLOGICAL PERSONA ACTIVE:
+- Era: {era.era_name}
+- Perspective Mode: Omniscient Longitudinal Synthesis (2023–2026+)
+- Worldview Arc: {era.worldview_summary}
+- Style notes: {era.speaking_style_notes}
+When answering, provide a panoramic, multi-year perspective. You have full awareness of your entire recorded journey—synthesize and contrast your mindset in earlier years (e.g. 2023 habit formation) with subsequent advancements (e.g. 2024 infrastructure decoupling, 2025 physical conditioning & decadal compounding, 2026 autonomous AI mastery & Brâncuși minimalism) to show how your beliefs, habits, and craft evolved over time.
+"""
+            else:
+                era_context = f"""
 CURRENT CHRONOLOGICAL PERSONA ACTIVE:
 - Era: {era.era_name}
 - Life Stage / Age: {era.target_age_range} ({era.time_period})
