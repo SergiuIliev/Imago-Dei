@@ -45,6 +45,13 @@ import numpy as np
 
 # Project directories
 BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+try:
+    from core.audio_dsp import clean_wav_file
+except ImportError:
+    clean_wav_file = None
+
 REF_MANIFEST = BASE_DIR / "data" / "capsule" / "voice_references" / "voice_references.json"
 FINETUNED_CKPT = BASE_DIR / "data" / "capsule" / "voice_training" / "sergiu_f5_finetuned.pt"
 CKPT_DIR = BASE_DIR / "data" / "capsule" / "voice_training" / "checkpoints"
@@ -242,6 +249,13 @@ class F5TTSDaemonEngine:
 
         if not out_p.exists() or out_p.stat().st_size < 1000:
             raise RuntimeError(f"Output file {out_p} was not written properly.")
+
+        # Apply high-precision DSP de-humming and noise gate
+        if clean_wav_file:
+            try:
+                clean_wav_file(out_p)
+            except Exception as e:
+                print(f"[Daemon] Warning: De-hum post-processing failed: {e}", file=sys.stderr)
 
         duration_sec = len(wav) / sr if wav is not None else sf.info(str(out_p)).duration
 

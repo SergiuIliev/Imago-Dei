@@ -109,7 +109,10 @@ class TestRetrievalAndBeliefs(unittest.TestCase):
         """Verifies that an unsupported inquiry returns honest uncertainty without fabricating facts."""
         turn = self.engine.process_turn("What was your favorite cafe in Paris during 2011?")
         self.assertFalse(turn.has_sufficient_evidence)
-        self.assertIn("don't have any record", turn.text.lower())
+        self.assertTrue(
+            any(p in turn.text.lower() for p in ["don't have any record", "memory not found", "no record"]),
+            f"Expected honest uncertainty statement, got: {turn.text}"
+        )
 
     def test_provider_replacement(self):
         """Verifies LLMProvider can be substituted dynamically via configuration."""

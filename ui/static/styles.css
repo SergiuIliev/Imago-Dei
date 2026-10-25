@@ -1200,3 +1200,112 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* --- Architecture & About Timeline Styles --- */
+.architecture-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.version-block {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  position: relative;
+  transition: border-color var(--motion-fast);
+}
+
+.version-block:hover {
+  border-color: var(--border-medium);
+}
+
+.version-block.current-version {
+  border-left: 3px solid var(--color-accent);
+  background: linear-gradient(135deg, rgba(110, 231, 183, 0.03) 0%, var(--bg-surface-elevated) 100%);
+}
+
+.version-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.version-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-base);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.version-badge.current {
+  background: rgba(110, 231, 183, 0.15);
+  color: var(--color-accent);
+  border-color: rgba(110, 231, 183, 0.35);
+}
+
+.version-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-high);
+  margin: 0;
+  flex-grow: 1;
+}
+
+.version-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.version-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.version-spec-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.spec-col {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.spec-col strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-accent);
+  margin-bottom: 4px;
+}
+
+.spec-col p {
+  font-size: 12px;
+  color: var(--text-medium);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.spec-col code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent);
+  background: rgba(110, 231, 183, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

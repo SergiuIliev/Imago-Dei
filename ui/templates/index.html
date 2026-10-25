@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="alternate icon" href="/static/favicon.ico">
+  <link rel="apple-touch-icon" href="/static/favicon.png">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -80,6 +83,12 @@
             <span class="material-symbols-outlined">tune</span>
           </span>
           <span>System & Config</span>
+        </button>
+        <button class="m3-nav-item" data-tab="about">
+          <span class="icon-wrapper">
+            <span class="material-symbols-outlined">auto_stories</span>
+          </span>
+          <span>About & Architecture</span>
         </button>
       </nav>
 
@@ -353,6 +362,195 @@
                 <span>Create Full Backup Archive</span>
               </button>
               <div id="backupOutput" class="m3-console-box">No backup run in this session.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 7: About & Architecture Evolution -->
+      <section id="tab-about" class="tab-pane">
+        <div class="m3-system-layout">
+          <!-- Overview Banner -->
+          <div class="m3-card" style="grid-column: 1 / -1; border-left: 3px solid var(--color-accent);">
+            <div class="m3-card-header">
+              <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:20px;">memory</span>
+                <span>Current Architecture: Version 4.0 (Dialectical Grounding & Parametric Fallback Bridge)</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <p style="color:var(--text-medium); line-height:1.6; font-size:13px; margin-bottom:12px;">
+                The Personal AI Time Capsule is a 100% private, on-device intelligence platform running locally on Apple Silicon (M4).
+                It synthesizes autobiographical identity, vocal prosody, and temporal philosophies across years of recorded video logs without transmitting a single byte to third-party cloud services.
+              </p>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:8px;">
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🧠 Parametric Fallback Bridge</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    Reconciles low-confidence retrieval with parametric memory via standardized prefix: <em>&ldquo;Memory not found. The closest memories are below. Based on fine-tuning, I can provide the following answer:&rdquo;</em>
+                  </span>
+                </div>
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">⚖️ Dialectical Belief Rigor</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    34 consolidated temporal beliefs requiring &ge; 2 corroborated sources to supersede. Includes millisecond timestamps for both supporting evidence and dialectical counterarguments.
+                  </span>
+                </div>
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🔊 De-Hummed Neural Voice</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    F5-TTS Metal MPS diffusion coupled with 4th-order 75Hz high-pass, 50/60/100/120Hz precision IIR notch filtering, and noise squelch eliminating electrical mains hum.
+                  </span>
+                </div>
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🎭 Vision-Verified Avatar</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    LivePortrait C¹ diffeomorphic vector smoothing with boundary alpha feathering, HSV enamel protection, and 0.000000ms LCM audio-video framing sync.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chronological Architecture Evolution Timeline -->
+          <div class="m3-card" style="grid-column: 1 / -1;">
+            <div class="m3-card-header">
+              <h3 style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:18px;">history_edu</span>
+                <span>Architectural Evolution: Behind-the-Scenes LLM & Memory Transformations</span>
+              </h3>
+            </div>
+            <div class="m3-card-body">
+              <p style="color:var(--text-muted); font-size:12px; margin-bottom:16px;">
+                Detailed chronicle of behind-the-scenes transformations across language model fine-tuning, memory retrieval pipelines, speech synthesis, and verification mechanisms:
+              </p>
+
+              <!-- Evolution Accordion / Cards -->
+              <div class="architecture-timeline">
+                <!-- Version 4.0 -->
+                <div class="version-block current-version">
+                  <div class="version-header">
+                    <span class="version-badge current">v4.0 · CURRENT</span>
+                    <h4 class="version-title">Dialectical Grounding, Parametric Fallback Bridge & Brâncuși Minimalism</h4>
+                    <span class="version-date">October 2026</span>
+                  </div>
+                  <div class="version-content">
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>LLM & Parametric Architecture:</strong>
+                        <p>Fine-tuned GGUF (<code>sergiu-time-capsule:latest</code>) on Ollama + dual-model JEV verifier (<code>qwen3:4b-heretic</code>). Introduced the <em>Parametric Fallback Bridge</em>: when semantic retrieval confidence falls below direct threshold, the system provides transparent candidate memories and answers authoritatively from fine-tuned weights without hallucinating or refusing.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Memory & Retrieval Engine:</strong>
+                        <p>1,231 atomic memories and 34 temporal beliefs consolidated with a &ge; 2 corroboration requirement to prevent single-vlog supersession. Timestamped supporting evidence and dialectical counterarguments/caveats indexed per belief.</p>
+                      </div>
+                    </div>
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>Acoustic & Avatar Pipeline:</strong>
+                        <p>DSP audio filtering pipeline (Butterworth 4th-order 75Hz HP + 50/60/100/120Hz high-Q IIR notch filters + noise gate) eliminating background electrical hum. Avatar engine enhanced with C¹ diffeomorphic vector field smoothing and 0.000000ms LCM framing quantum.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Interface & UX:</strong>
+                        <p>Brâncuși-inspired obsidian dark aesthetic (<code>#08090d</code>, <code>#0c0e14</code>), singleton audio controller preventing overlapping playback, 1-click verification, and this Architecture History portal.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Version 3.0 -->
+                <div class="version-block">
+                  <div class="version-header">
+                    <span class="version-badge">v3.0</span>
+                    <h4 class="version-title">300GB Multi-Year Alignment, Autobiographical SFT LoRA & Omniscient Era</h4>
+                    <span class="version-date">October 2026</span>
+                  </div>
+                  <div class="version-content">
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>LLM & Parametric Architecture:</strong>
+                        <p>Ingestion of 288 daily vlogs across 2023–2026. Extraction of 1,847 curated SFT Q&A pairs fine-tuned directly into custom GGUF model (<code>sergiu-time-capsule</code>). Omniscient Longitudinal Mode (<code>all_eras</code>) introduced for multi-year panoramic synthesis.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Memory & Retrieval Engine:</strong>
+                        <p>Multi-era hybrid Reciprocal Rank Fusion (RRF) combining SQLite FTS5 BM25 with ChromaDB dense ONNX vector embeddings. 1,231 atomic memories indexed with temporal era tags.</p>
+                      </div>
+                    </div>
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>Acoustic & Avatar Pipeline:</strong>
+                        <p>Persistent F5-TTS Metal MPS daemon on port 7861 with warm GPU memory caching. First audio-driven LivePortrait talking head implementation with 1024-sample AAC framing.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Key Discoveries & Gaps:</strong>
+                        <p>Raw audio retained background microphone electrical hum; beliefs had duplicate entries that could be superseded by a single vlog; avatar had mouth tearing at vowel extremes.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Version 2.0 -->
+                <div class="version-block">
+                  <div class="version-header">
+                    <span class="version-badge">v2.0</span>
+                    <h4 class="version-title">Temporal Ingestion, Discrete Chronological Eras & JEV Verifier</h4>
+                    <span class="version-date">October 2026</span>
+                  </div>
+                  <div class="version-content">
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>LLM & Parametric Architecture:</strong>
+                        <p>Prompt-grounded persona profiles across 4 life stages (Early 20s, Mid 20s, 2023, Present Day). Introduced JEV Dual-Model verification (Generator + Critic) to check grounding and honest uncertainty.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Memory & Retrieval Engine:</strong>
+                        <p>SQLite FTS5 full-text search combined with ChromaDB vector search. Push-to-talk Whisper ASR transcription for user queries.</p>
+                      </div>
+                    </div>
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>Acoustic & Avatar Pipeline:</strong>
+                        <p>Kokoro-82M neural TTS with custom speaker tensor; fallback to macOS native speech. Static persona portrait reference images.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Key Discoveries & Gaps:</strong>
+                        <p>Lacked deep autobiographical fine-tuning (relied solely on RAG context); queries without exact lexical overlap triggered cold refusals rather than reasoned answers.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Version 1.0 -->
+                <div class="version-block">
+                  <div class="version-header">
+                    <span class="version-badge">v1.0</span>
+                    <h4 class="version-title">Initial Prototype: Flat Context RAG & Speech Synthesis</h4>
+                    <span class="version-date">October 2026</span>
+                  </div>
+                  <div class="version-content">
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>LLM & Parametric Architecture:</strong>
+                        <p>Base Ollama model with standard prompt injection; no era disambiguation; flat temporal timeline; no critic or dual-model cross-auditing.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Memory & Retrieval Engine:</strong>
+                        <p>Single SQLite database table with simple keyword pattern matching; manual memory entry; no vector embeddings or confidence calibration.</p>
+                      </div>
+                    </div>
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>Acoustic & Avatar Pipeline:</strong>
+                        <p>Standard system speech synthesis without speaker reference conditioning; no video avatar capabilities.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Key Discoveries & Gaps:</strong>
+                        <p>Severe vulnerability to hallucination; inability to capture personal voice timbre or philosophical shifts across life stages.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

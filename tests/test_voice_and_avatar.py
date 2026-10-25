@@ -161,6 +161,59 @@ class TestVoiceAndAvatar(unittest.TestCase):
         self.assertLess(duration_delta_ms, 20.0, f"Duration difference too high: {duration_delta_ms} ms")
         container.close()
 
+    def test_audio_dsp_dehumming(self):
+        """Verifies DSP audio filter removes 50Hz/60Hz mains hum, 120Hz harmonics, and DC offset."""
+        import numpy as np
+        import soundfile as sf
+        from core.audio_dsp import clean_audio_signal, clean_wav_file
+
+        sr = 24000
+        duration = 1.5
+        t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+
+        # 200 Hz voice fundamental + 50 Hz EU hum + 120 Hz US second harmonic + DC offset
+        voice = 0.5 * np.sin(2 * np.pi * 200 * t)
+        hum_50 = 0.25 * np.sin(2 * np.pi * 50 * t)
+        hum_120 = 0.35 * np.sin(2 * np.pi * 120 * t)
+        dc_offset = 0.08
+        raw_signal = voice + hum_50 + hum_120 + dc_offset
+
+        # FFT before filtering
+        fft_raw = np.abs(np.fft.rfft(raw_signal))
+        freqs = np.fft.rfftfreq(len(raw_signal), 1.0 / sr)
+        idx_50 = np.argmin(np.abs(freqs - 50.0))
+        idx_120 = np.argmin(np.abs(freqs - 120.0))
+        raw_50_mag = fft_raw[idx_50]
+        raw_120_mag = fft_raw[idx_120]
+
+        # Apply DSP filter
+        cleaned = clean_audio_signal(raw_signal, sr=sr)
+        self.assertEqual(len(cleaned), len(raw_signal))
+
+        # FFT after filtering
+        fft_clean = np.abs(np.fft.rfft(cleaned))
+        clean_50_mag = fft_clean[idx_50]
+        clean_120_mag = fft_clean[idx_120]
+
+        # Hum components must be attenuated significantly
+        self.assertLess(clean_50_mag, raw_50_mag * 0.15, "50Hz hum was not sufficiently attenuated")
+        self.assertLess(clean_120_mag, raw_120_mag * 0.15, "120Hz harmonic was not sufficiently attenuated")
+
+        # DC offset must be eliminated
+        self.assertAlmostEqual(float(np.mean(cleaned)), 0.0, places=2)
+
+        # Peak must be normalized to -1.0 dBFS (0.891)
+        self.assertAlmostEqual(float(np.max(np.abs(cleaned))), 0.891, delta=0.01)
+
+        # Test WAV file clean in-place
+        test_wav = os.path.join(self.test_dir, "test_hum.wav")
+        sf.write(test_wav, raw_signal.astype(np.float32), sr)
+        clean_wav_file(test_wav)
+        self.assertTrue(os.path.exists(test_wav))
+        loaded_data, loaded_sr = sf.read(test_wav)
+        self.assertEqual(loaded_sr, sr)
+        self.assertAlmostEqual(float(np.max(np.abs(loaded_data))), 0.891, delta=0.02)
+
 
 if __name__ == "__main__":
     unittest.main()

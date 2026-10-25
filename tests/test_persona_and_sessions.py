@@ -250,6 +250,20 @@ class TestPersonaAndSessionMemory(unittest.TestCase):
         self.assertGreaterEqual(len(beliefs_forge), 1)
         self.assertTrue(any("forge" in b.belief_statement.lower() for b in beliefs_forge))
 
+    def test_standardized_fallback_bridge(self):
+        """Verifies that queries with low retrieval confidence trigger the standardized fallback prefix."""
+        self.mock_llm.canned_response = "I am deeply driven by simplicity and continuous compounding."
+        resp = self.engine.process_turn(
+            query="What is your favorite cooking recipe from childhood?"
+        )
+        self.assertFalse(resp.has_sufficient_evidence)
+        expected_prefix = (
+            "Memory not found. The closest memories are below. "
+            "Based on fine-tuning, I can provide the following answer:"
+        )
+        self.assertIn(expected_prefix, resp.text)
+        self.assertIn("simplicity and continuous compounding", resp.text)
+
 
 if __name__ == "__main__":
     unittest.main()

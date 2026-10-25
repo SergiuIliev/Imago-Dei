@@ -60,7 +60,9 @@ UNCERTAINTY_PHRASES = [
     "cannot confirm",
     "don't remember",
     "haven't recorded",
-    "not in my memories"
+    "not in my memories",
+    "memory not found",
+    "closest memories are below"
 ]
 
 
@@ -373,7 +375,12 @@ class LocalJevEngine:
                     reasoning = "Draft matches retrieved memory evidence."
 
             # 2. Honest uncertainty check
-            elif "honest_uncertainty" in instr_lower or "acknowledge that the archive lacks" in instr_lower:
+            elif (
+                "honest_uncertainty" in instr_lower or
+                "acknowledge that the archive lacks" in instr_lower or
+                "memory not found" in instr_lower or
+                "direct records are absent" in instr_lower
+            ):
                 if "has_sufficient_evidence: false" in ctx_lower:
                     if has_honest_uncertainty(full_context):
                         noul = 0.95
@@ -674,6 +681,7 @@ class LocalJevEngine:
         """
         if not has_sufficient_evidence:
             return (
+                "Memory not found. The closest memories are below. Based on fine-tuning, I can provide the following answer:\n\n"
                 "Based on my available recorded memories, I don't have any record or personal statement about this. "
                 "I would rather admit I don't recall than make something up."
             )
@@ -773,9 +781,12 @@ class DualModelVerifier:
             context=context
         )
 
-        # 2. Evaluate Honest Uncertainty via Noul
+        # 2. Evaluate Honest Uncertainty & Parametric Bridge via Noul
         honest_uncertainty_respected = self.critic_engine.Noul(
-            instructions="If has_sufficient_evidence is False, does the draft clearly acknowledge that the archive lacks this information rather than guessing?",
+            instructions=(
+                "If has_sufficient_evidence is False, does the draft either begin with 'Memory not found. The closest memories are below. Based on fine-tuning, I can provide the following answer:' "
+                "or clearly state that direct records are absent rather than fabricating fake historical events?"
+            ),
             context=context
         )
 

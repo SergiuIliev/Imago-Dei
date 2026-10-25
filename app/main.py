@@ -191,6 +191,15 @@ async def serve_index(request: Request):
     )
 
 
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+async def serve_favicon():
+    """Serves the website favicon icon."""
+    favicon_path = STATIC_DIR / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(str(favicon_path), media_type="image/x-icon")
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+
 @app.get("/api/health")
 async def health_check():
     """System health check across all subcomponents."""

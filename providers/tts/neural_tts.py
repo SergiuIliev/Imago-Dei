@@ -21,6 +21,7 @@ import numpy as np
 
 from core.models import ExpressiveDeliveryParams, EmotionCategory
 from core.voice import VoiceProfile, ExpressiveDeliveryController, get_reference_clip_for_emotion
+from core.audio_dsp import clean_audio_signal, clean_wav_file
 from providers.tts.base import TTSProvider
 from providers.tts.macos_tts import MacOSNativeTTSProvider
 
@@ -238,7 +239,8 @@ class NeuralTTSProvider(TTSProvider):
 
                     if success and audio_blocks:
                         combined_audio = np.concatenate(audio_blocks)
-                        sf.write(str(out_path), combined_audio, sr)
+                        cleaned_audio = clean_audio_signal(combined_audio, sr)
+                        sf.write(str(out_path), cleaned_audio, sr)
                         return str(out_path)
 
                 else:
@@ -251,6 +253,7 @@ class NeuralTTSProvider(TTSProvider):
                         steps=steps
                     )
                     if direct_ok:
+                        clean_wav_file(str(out_path))
                         return str(out_path)
 
             except Exception as e:
@@ -276,6 +279,7 @@ class NeuralTTSProvider(TTSProvider):
                 env["PYTHONHASHSEED"] = "0"
                 res = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
                 if res.returncode == 0 and os.path.exists(output_file_path) and os.path.getsize(output_file_path) > 1000:
+                    clean_wav_file(output_file_path)
                     return output_file_path
                 else:
                     print(f"[NeuralTTSProvider] Notice: F5-TTS subprocess returned code {res.returncode}, falling back to Kokoro: {res.stderr[:200]}")
@@ -308,7 +312,8 @@ class NeuralTTSProvider(TTSProvider):
 
                 if all_audio:
                     combined_audio = np.concatenate(all_audio) if len(all_audio) > 1 else all_audio[0]
-                    sf.write(str(out_path), combined_audio, 24000)
+                    cleaned_audio = clean_audio_signal(combined_audio, 24000)
+                    sf.write(str(out_path), cleaned_audio, 24000)
                     return str(out_path)
 
             except Exception as e:

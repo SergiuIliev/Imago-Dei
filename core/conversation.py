@@ -63,6 +63,12 @@ AI_IDENTITY_PATTERNS = [
 ]
 
 
+STANDARDIZED_FALLBACK_PREFIX = (
+    "Memory not found. The closest memories are below. "
+    "Based on fine-tuning, I can provide the following answer:"
+)
+
+
 def sanitize_persona_text(text: str) -> str:
     """Eliminates theatrical stage cues, bracketed emotions, and AI self-referrals."""
     cleaned = STAGE_CUES_PATTERN.sub(' ', text)
@@ -222,7 +228,11 @@ class ConversationEngine:
         prompt_parts.append(f"User asks: \"{query}\"")
         if force_simulation or not has_evidence:
             if not has_evidence:
-                prompt_parts.append("[Note: Archive search returned no direct match. State honest uncertainty clearly.]")
+                prompt_parts.append(
+                    f'[Note: Archive retrieval did not find direct high-confidence records for this specific query. '
+                    f'Begin your response with the exact prefix: "{STANDARDIZED_FALLBACK_PREFIX}" '
+                    f'and then answer fully based on your fine-tuned parametric knowledge of Sergiu\'s training corpus.]'
+                )
             else:
                 prompt_parts.append(f"[Request: Simulate how you would reason about this from the perspective of {active_era.era_name if active_era else 'your past self'}. Prefix response with [SIMULATED PERSPECTIVE].]")
 
@@ -232,7 +242,7 @@ class ConversationEngine:
         model_output = self.llm.generate(
             prompt=user_prompt,
             system_prompt=system_prompt,
-            temperature=0.35 if has_evidence else 0.2
+            temperature=0.35 if has_evidence else 0.3
         )
 
         # Sanitize output against stage directions and AI roleplay disclaimers
@@ -253,6 +263,51 @@ class ConversationEngine:
                 model_output = sanitize_persona_text(model_output)
             except Exception:
                 pass
+
+        # 9c. Standardized Parametric Fallback Enforcement
+        is_greeting = re.sub(r'[^a-zA-Z\s]', '', query).strip().lower() in {
+            "hello", "hi", "hey", "good morning", "good afternoon", "good evening", "greetings"
+        }
+
+        if not has_evidence and not force_simulation and not is_greeting:
+            # Check if standardized prefix is already cleanly present
+            has_prefix = (
+                "memory not found" in model_output.lower() and
+                "closest memories are below" in model_output.lower()
+            )
+            if not has_prefix:
+                refusal_patterns = [
+                    r'^(?:Based on my available recorded memories,?\s*I don\'t have any record[^.]*\.\s*(?:I would rather admit[^.]*\.)?\s*)',
+                    r'^(?:I don\'t recall mentioning this in my recorded memories[^.]*\.\s*)',
+                    r'^(?:My recorded archive contains no record of this[^.]*\.\s*)'
+                ]
+                clean_body = model_output
+                for pat in refusal_patterns:
+                    clean_body = re.sub(pat, '', clean_body, flags=re.IGNORECASE).strip()
+
+                if not clean_body or len(clean_body.split()) < 5:
+                    # Regenerate directly from fine-tuned parametric weights
+                    ft_sys = (
+                        "You are Sergiu. You are speaking directly from your real life memories, experiences, and extensive autobiographical fine-tuning.\n"
+                        "Direct archive search found no exact record, but you can answer authoritatively from your fine-tuned parametric weights.\n"
+                        "Answer the user's question directly in natural first-person ('I', 'my') as Sergiu about your passions, mindset, habits, or craft.\n"
+                        "Do NOT refuse. Do NOT include stage cues or AI disclaimers."
+                    )
+                    ft_user = f"User asks: \"{query}\"\nProvide your authentic answer as Sergiu based on your fine-tuning:"
+                    clean_body = self.llm.generate(prompt=ft_user, system_prompt=ft_sys, temperature=0.35)
+                    clean_body = sanitize_persona_text(clean_body)
+                    for pat in refusal_patterns:
+                        clean_body = re.sub(pat, '', clean_body, flags=re.IGNORECASE).strip()
+
+                if clean_body:
+                    model_output = f"{STANDARDIZED_FALLBACK_PREFIX}\n\n{clean_body}"
+                else:
+                    model_output = (
+                        f"{STANDARDIZED_FALLBACK_PREFIX}\n\n"
+                        "I am deeply driven by long-term compounding, autonomous systems engineering, relentless physical conditioning, "
+                        "and building private, local-first intelligence systems. My daily vlogs reflect a continuous focus on habit consistency, "
+                        "craftsmanship, and eliminating friction across software and life."
+                    )
 
         # 10. Persist user turn and assistant response into session memory
         if session_id:

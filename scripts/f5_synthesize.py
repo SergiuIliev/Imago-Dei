@@ -22,6 +22,13 @@ if not os.environ.get("PYTHONHASHSEED") or not os.environ.get("PYTHONHASHSEED", 
 os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+try:
+    from core.audio_dsp import clean_wav_file
+except ImportError:
+    clean_wav_file = None
+
 REF_MANIFEST = BASE_DIR / "data" / "capsule" / "voice_references" / "voice_references.json"
 FINETUNED_CKPT = BASE_DIR / "data" / "capsule" / "voice_training" / "sergiu_f5_finetuned.pt"
 CKPT_DIR = BASE_DIR / "data" / "capsule" / "voice_training" / "checkpoints"
@@ -173,6 +180,11 @@ def main():
         nfe_step=args.steps
     )
     elapsed = time.time() - t0
+    if clean_wav_file and out_path.exists():
+        try:
+            clean_wav_file(str(out_path))
+        except Exception as e:
+            print(f"[F5-TTS] Warning: DSP de-hum failed: {e}", file=sys.stderr)
     print(f"[F5-TTS] Cloned speech generated locally in {elapsed:.2f}s -> {out_path} ({sr}Hz)")
 
 if __name__ == "__main__":

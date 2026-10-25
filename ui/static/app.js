@@ -145,6 +145,10 @@ document.addEventListener("DOMContentLoaded", () => {
     "system": {
       title: "System Configuration & Disaster Recovery",
       subhead: "Host specifications, model registry status, local invariants, and backup management"
+    },
+    "about": {
+      title: "About & Architectural Evolution",
+      subhead: "Chronicle of behind-the-scenes LLM fine-tuning, memory transformations, and acoustic engineering across versions"
     }
   };
 
@@ -416,10 +420,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let evidenceHtml = "";
 
     if (data.evidence_used && data.evidence_used.length > 0) {
+      const isDirect = data.has_sufficient_evidence;
+      const titleLabel = isDirect
+        ? `📚 Grounded Source Evidence (${data.evidence_used.length} sources)`
+        : `📚 Closest Memories (${data.evidence_used.length} retrieved candidates)`;
+      const subLabel = isDirect
+        ? ''
+        : `<span style="font-size:11px; color:var(--text-muted); font-weight:400; margin-left:6px;">· Consulted via fine-tuned weights</span>`;
+
       evidenceHtml = `
         <div class="m3-evidence-card">
           <div class="evidence-title-row">
-            <span>📚 Grounded Source Evidence (${data.evidence_used.length} sources)</span>
+            <span>${titleLabel}</span>
+            ${subLabel}
           </div>
           ${data.evidence_used.map(ev => `
             <div class="evidence-citation-line" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 4px 0;">
@@ -436,11 +449,11 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     } else {
       evidenceHtml = `
-        <div class="m3-evidence-card" style="border-left-color: var(--md-sys-color-warning);">
-          <div class="evidence-title-row" style="color: var(--md-sys-color-warning);">
-            <span>⚠️ Archive Notice: No direct recorded memory found</span>
+        <div class="m3-evidence-card" style="border-left-color: var(--md-sys-color-primary);">
+          <div class="evidence-title-row" style="color: var(--color-accent);">
+            <span>💡 Parametric Corpus Knowledge: Direct memory not found</span>
           </div>
-          <div class="evidence-citation-line">Stated honest uncertainty without fabricating personal facts.</div>
+          <div class="evidence-citation-line">Answered authoritatively from autobiographical weights fine-tuned on Sergiu's full video log archive.</div>
         </div>
       `;
     }
