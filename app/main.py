@@ -146,6 +146,8 @@ class ChatRequest(BaseModel):
     era_id: Optional[str] = None
     verification_filter: Optional[str] = None
     synthesize_audio: bool = False
+    render_avatar: bool = False
+    synthesize_avatar: bool = False
     force_simulation: bool = False
     session_id: Optional[str] = None
 
@@ -226,7 +228,7 @@ async def get_eras():
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    """Processes conversational turn with grounded retrieval, citations, and optional TTS."""
+    """Processes conversational turn with grounded retrieval, citations, optional TTS, and era-aware avatar rendering."""
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
@@ -239,7 +241,10 @@ async def chat_endpoint(req: ChatRequest):
     )
 
     audio_url = None
-    if req.synthesize_audio:
+    audio_path = None
+    should_synthesize_audio = req.synthesize_audio or req.render_avatar or req.synthesize_avatar
+
+    if should_synthesize_audio:
         try:
             filename = f"chat_{uuid.uuid4().hex[:10]}.wav"
             out_path = os.path.join(config.storage.audio_output_dir, filename)
@@ -249,11 +254,29 @@ async def chat_endpoint(req: ChatRequest):
                 output_file_path=out_path
             )
             audio_url = f"/api/audio/{filename}"
+            audio_path = out_path
         except Exception as e:
             print(f"[Chat] TTS error: {e}")
 
+    avatar_job_dict = None
+    if (req.render_avatar or req.synthesize_avatar) and audio_path and os.path.exists(audio_path):
+        try:
+            target_era = resp.era_id or req.era_id
+            job = avatar_provider.create_render_job(
+                audio_path=audio_path,
+                options={"era_id": target_era}
+            )
+            avatar_job_dict = job.to_dict()
+            if target_era:
+                avatar_job_dict["era_id"] = target_era
+        except Exception as e:
+            print(f"[Chat] Avatar render error: {e}")
+
     result = resp.to_dict()
     result["audio_url"] = audio_url
+    if avatar_job_dict:
+        result["avatar_job"] = avatar_job_dict
+        result["avatar_job_id"] = avatar_job_dict.get("job_id")
     return result
 
 
@@ -503,10 +526,28 @@ async def run_ingestion(req: IngestionRequest):
 
 @app.post("/api/avatar/render")
 async def create_avatar_render(
-    audio_filename: str = Form(...),
-    reference_portrait: Optional[str] = Form(None)
+    request: Request,
+    audio_filename: Optional[str] = Form(None),
+    reference_portrait: Optional[str] = Form(None),
+    era_id: Optional[str] = Form(None),
+    mode: Optional[str] = Form(None)
 ):
-    """Enqueues an audio-driven avatar render job with synchronized H.264+AAC muxing."""
+    """Enqueues an audio-driven avatar render job with synchronized H.264+AAC muxing and era-awareness."""
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                audio_filename = body.get("audio_filename") or audio_filename
+                reference_portrait = body.get("reference_portrait") or reference_portrait
+                era_id = body.get("era_id") or era_id
+                mode = body.get("mode") or mode
+        except Exception:
+            pass
+
+    if not audio_filename:
+        raise HTTPException(status_code=400, detail="audio_filename is required")
+
     candidate_paths = [
         os.path.join(config.storage.audio_output_dir, audio_filename),
         os.path.join(config.storage.data_dir, "audio_cache", audio_filename),
@@ -517,11 +558,22 @@ async def create_avatar_render(
     if not audio_path:
         raise HTTPException(status_code=404, detail="Source audio file not found")
 
+    options: Dict[str, Any] = {}
+    if era_id:
+        options["era_id"] = era_id
+    if mode:
+        options["mode"] = mode
+
     job = avatar_provider.create_render_job(
         audio_path=audio_path,
-        reference_portrait=reference_portrait
+        reference_portrait=reference_portrait,
+        options=options,
+        era_id=era_id
     )
-    return job.to_dict()
+    res = job.to_dict()
+    if era_id:
+        res["era_id"] = era_id
+    return res
 
 
 @app.get("/api/avatar/status/{job_id}")
@@ -530,7 +582,10 @@ async def get_avatar_status(job_id: str):
     job = avatar_provider.get_job_status(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job.to_dict()
+    res = job.to_dict()
+    if hasattr(job, "era_id") and job.era_id:
+        res["era_id"] = job.era_id
+    return res
 
 
 @app.get("/api/avatar/video/{filename}")
@@ -543,9 +598,9 @@ async def serve_avatar_video(filename: str):
 
 
 @app.get("/api/avatar/portrait")
-async def serve_avatar_portrait():
-    """Serves the canonical reference portrait image."""
-    portrait_path = avatar_provider.resolve_reference_portrait()
+async def serve_avatar_portrait(era_id: Optional[str] = None):
+    """Serves the canonical reference portrait image, optionally for a specific era."""
+    portrait_path = avatar_provider.resolve_reference_portrait(era_id=era_id)
     if not os.path.exists(portrait_path):
         raise HTTPException(status_code=404, detail="Reference portrait not found")
     return FileResponse(portrait_path, media_type="image/png")

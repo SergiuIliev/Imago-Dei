@@ -19,6 +19,7 @@ if curl -s -m 1 http://127.0.0.1:7861/health > /dev/null 2>&1; then
 fi
 
 export PYTHONHASHSEED="0"
+export PYTORCH_ENABLE_MPS_FALLBACK="1"
 export PYTHONPATH="$PROJECT_ROOT"
 
 echo "Starting F5-TTS Metal MPS Voice Daemon..."

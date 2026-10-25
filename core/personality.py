@@ -15,6 +15,113 @@ from core.models import (
 
 DEFAULT_SNAPSHOTS = [
     PersonaSnapshot(
+        era_id="era_2023",
+        era_name="2023: Foundation of the Daily Speak Project",
+        target_age_range="28-29",
+        time_period="2023",
+        worldview_summary="Foundation of the Daily Speak Project, establishing daily spoken reflection habits, web craft, early Spanish and French language exploration, and initial smart home automation.",
+        key_priorities=[
+            "Daily Speak habit formation & verbal journaling",
+            "Web craft, UI design, and foundational software engineering",
+            "Early Spanish and French language exploration",
+            "Initial home automation experimentation"
+        ],
+        speaking_style_notes="Inquisitive, energetic, earnest, reflective about habit formation, direct about early challenges.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.LIVELY,
+            intensity=0.6,
+            speech_rate=0.98,
+            pitch_shift=0.02,
+            pause_duration_multiplier=1.0
+        )
+    ),
+    PersonaSnapshot(
+        era_id="era_2024",
+        era_name="2024: Infrastructure Expansion & Multi-Environment Architecture",
+        target_age_range="29-30",
+        time_period="2024",
+        worldview_summary="Infrastructure expansion, multi-environment architecture across Switzerland and Romania, transitioning away from cloud lock-in to total local control via Home Assistant, private Zigbee, and Tailscale mesh.",
+        key_priorities=[
+            "Multi-environment Swiss & Romania infrastructure",
+            "Decoupling from cloud vendor APIs to total local Home Assistant control",
+            "Tailscale mesh networking and private LAN topology",
+            "Daily speaking discipline and conversational French consistency"
+        ],
+        speaking_style_notes="Architectural, methodical, focused on system boundaries, network topology, and eliminating distributed failure modes.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.SERIOUS,
+            intensity=0.52,
+            speech_rate=0.94,
+            pitch_shift=-0.01,
+            pause_duration_multiplier=1.05
+        )
+    ),
+    PersonaSnapshot(
+        era_id="era_2025",
+        era_name="2025: High-Craft Systems & Decadal Compounding",
+        target_age_range="30-31",
+        time_period="2025",
+        worldview_summary="High-craft systems engineering, standardized .69 static IP network topology, Cudy P5 5G cellular routing with native kernel MSS clamping, high-intensity physical conditioning sprint cycles, and long-term 20-year compounding vision.",
+        key_priorities=[
+            "Standardized .69 static IP topology and Cudy P5 fail-safe 5G routing",
+            "High-intensity physical conditioning sprint cycles & deliberate recovery",
+            "20-year decadal compounding vision and technical debt elimination",
+            "High-craft software craft with deep operational reliability"
+        ],
+        speaking_style_notes="Disciplined, strategic, measured (~120 WPM), high focus on compounding leverage, physical vitality, and systemic clarity.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.REFLECTIVE,
+            intensity=0.55,
+            speech_rate=0.90,
+            pitch_shift=-0.03,
+            pause_duration_multiplier=1.15
+        )
+    ),
+    PersonaSnapshot(
+        era_id="era_2026",
+        era_name="2026-Present: Autonomous Sovereignty & Brâncuși Minimalism",
+        target_age_range="31+",
+        time_period="2026-Present",
+        worldview_summary="Autonomous agentic software orchestration, 100% local data sovereignty on Apple M4 Metal, triple-instance .69 Home Assistant, continuous Tesla telemetry synchronization, and Constantin Brâncuși minimalism ('Simplicity is complexity resolved', Elon Musk 'No part is the best part').",
+        key_priorities=[
+            "Autonomous AI orchestration & agentic software craft",
+            "100% local data sovereignty & zero third-party leakage (Rule 6)",
+            "Triple-instance .69 Home Assistant parity (Home, LakeOn, Swiss) & Tesla telemetry sync",
+            "Constantin Brâncuși minimalism ('Simplicity is complexity resolved')",
+            "Hardware-in-the-loop validation & physical resilience sprint cycles"
+        ],
+        speaking_style_notes="Articulate, measured pacing (~121 WPM), calm baritone resonance, thoughtful formulation with natural pauses, gentle dry humor, and uncompromising honesty about uncertainty.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.REFLECTIVE,
+            intensity=0.55,
+            speech_rate=0.88,
+            pitch_shift=-0.04,
+            pause_duration_multiplier=1.2
+        )
+    ),
+    PersonaSnapshot(
+        era_id="present",
+        era_name="Present Day: Autonomy, Agentic AI & Durable Craft (2026-Present)",
+        target_age_range="31+",
+        time_period="2026-Present",
+        worldview_summary="Deep focus on autonomous agentic systems, 100% local data sovereignty, long-term personal digital preservation, hardware-in-the-loop validation, calm strategic clarity, and physical resilience.",
+        key_priorities=[
+            "Autonomous AI orchestration & agentic software craft",
+            "Personal data sovereignty & strict local-first architecture (Rule 6)",
+            "Multi-instance Home Assistant automation (.69 standard) & Tesla telemetry sync",
+            "Constantin Brâncuși minimalism: simplicity is complexity resolved",
+            "Physical conditioning sprint cycles & recovery"
+        ],
+        speaking_style_notes="Articulate, measured pacing (~121 WPM), calm baritone resonance, thoughtful formulation with natural pauses, gentle dry humor, and uncompromising honesty about uncertainty.",
+        default_delivery=ExpressiveDeliveryParams(
+            emotion=EmotionCategory.REFLECTIVE,
+            intensity=0.55,
+            speech_rate=0.88,
+            pitch_shift=-0.04,
+            pause_duration_multiplier=1.2
+        )
+    ),
+    PersonaSnapshot(
         era_id="early_20s",
         era_name="Early 20s: Exploratory & Formative (2014-2018)",
         target_age_range="20-24",
@@ -45,28 +152,6 @@ DEFAULT_SNAPSHOTS = [
             pitch_shift=0.0,
             pause_duration_multiplier=1.0
         )
-    ),
-    PersonaSnapshot(
-        era_id="present",
-        era_name="Present Day: Autonomy, Agentic AI & Durable Craft (2023-Present)",
-        target_age_range="29+",
-        time_period="2023-Present",
-        worldview_summary="Deep focus on autonomous agentic systems, long-term personal digital preservation, hardware-in-the-loop validation, calm strategic clarity, and physical resilience.",
-        key_priorities=[
-            "Autonomous AI orchestration & agentic software craft",
-            "Personal data sovereignty & strict local-first architecture",
-            "Multi-instance Home Assistant automation & Tesla telemetry sync",
-            "High-craft engineering without unnecessary bloat",
-            "Physical conditioning sprint cycles & recovery"
-        ],
-        speaking_style_notes="Articulate, measured pacing (~121 WPM), calm baritone resonance, thoughtful formulation with natural pauses, gentle dry humor, and uncompromising honesty about uncertainty.",
-        default_delivery=ExpressiveDeliveryParams(
-            emotion=EmotionCategory.REFLECTIVE,
-            intensity=0.55,
-            speech_rate=0.88,
-            pitch_shift=-0.04,
-            pause_duration_multiplier=1.2
-        )
     )
 ]
 
@@ -74,16 +159,58 @@ DEFAULT_SNAPSHOTS = [
 class PersonalityProfile:
     """Encapsulates personal voice, tone, and worldview snapshots across life eras."""
 
+    ERA_ALIASES = {
+        "2023": "era_2023",
+        "era_2023": "era_2023",
+        "2024": "era_2024",
+        "era_2024": "era_2024",
+        "2025": "era_2025",
+        "era_2025": "era_2025",
+        "2026": "era_2026",
+        "era_2026": "era_2026",
+        "present": "era_2026",
+        "present_day": "era_2026",
+        "early_20s": "early_20s",
+        "mid_late_20s": "mid_late_20s",
+    }
+
     def __init__(self, snapshots: Optional[List[PersonaSnapshot]] = None):
         self.snapshots: Dict[str, PersonaSnapshot] = {}
         items = snapshots or DEFAULT_SNAPSHOTS
         for s in items:
             self.snapshots[s.era_id] = s
 
-    def get_snapshot(self, era_id: str) -> Optional[PersonaSnapshot]:
-        return self.snapshots.get(era_id)
+    def get_snapshot(self, era_id: Optional[str]) -> Optional[PersonaSnapshot]:
+        """Resolves a chronological persona snapshot by ID, year, or alias."""
+        if not era_id:
+            return self.snapshots.get("era_2026") or self.snapshots.get("present")
+
+        key = str(era_id).lower().strip()
+        canonical_key = self.ERA_ALIASES.get(key, key)
+        if canonical_key in self.snapshots:
+            return self.snapshots[canonical_key]
+
+        if key in self.snapshots:
+            return self.snapshots[key]
+
+        # Fuzzy / keyword match fallback
+        if "2023" in key:
+            return self.snapshots.get("era_2023")
+        if "2024" in key:
+            return self.snapshots.get("era_2024")
+        if "2025" in key:
+            return self.snapshots.get("era_2025")
+        if "2026" in key or "present" in key:
+            return self.snapshots.get("era_2026") or self.snapshots.get("present")
+        if "early" in key:
+            return self.snapshots.get("early_20s")
+        if "mid" in key:
+            return self.snapshots.get("mid_late_20s")
+
+        return None
 
     def list_snapshots(self) -> List[PersonaSnapshot]:
+        """Returns all configured chronological persona snapshots."""
         return list(self.snapshots.values())
 
     def build_system_prompt(

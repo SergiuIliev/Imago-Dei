@@ -6,11 +6,36 @@ Demuxes audio containers with PyAV C bindings and performs speech transcription.
 from __future__ import annotations
 import uuid
 import wave
+import re
 from pathlib import Path
 from typing import List, Optional
 from core.models import TranscriptSegment
 from providers.asr.base import ASRProvider
 from providers.asr.mock_provider import MockASRProvider
+
+DOMAIN_INITIAL_PROMPT = (
+    "Personal video log by Sergiu Iliev. Topics: systems engineering, "
+    "Constantin Brâncuși, Romania, Brașov, LakeOn, Switzerland, "
+    "Home Assistant, Tailscale, AI agents, physical conditioning, philosophy."
+)
+
+
+def normalize_domain_lexicon(text: str) -> str:
+    """
+    Applies deterministic phonetic and domain terminology corrections:
+    'Bruncush'/'Brancusi' -> 'Brâncuși'
+    'Brasov' -> 'Brașov'
+    'Lake On' -> 'LakeOn'
+    """
+    if not text:
+        return text
+    # 'Bruncush'/'Brancusi' -> 'Brâncuși'
+    text = re.sub(r'\b(?:Bruncush|Brancusi)\b', 'Brâncuși', text, flags=re.IGNORECASE)
+    # 'Brasov' -> 'Brașov'
+    text = re.sub(r'\bBrasov\b', 'Brașov', text, flags=re.IGNORECASE)
+    # 'Lake On' -> 'LakeOn'
+    text = re.sub(r'\bLake\s+On\b', 'LakeOn', text, flags=re.IGNORECASE)
+    return text
 
 
 class PyAVWhisperASRProvider(ASRProvider):
@@ -95,13 +120,15 @@ class PyAVWhisperASRProvider(ASRProvider):
                     media_path,
                     beam_size=5,
                     vad_filter=True,
-                    vad_parameters=dict(min_silence_duration_ms=500)
+                    vad_parameters=dict(min_silence_duration_ms=500),
+                    initial_prompt=DOMAIN_INITIAL_PROMPT
                 )
                 segments = []
                 for seg in segments_iter:
                     text = seg.text.strip()
                     if not text:
                         continue
+                    text = normalize_domain_lexicon(text)
                     conf = round(math.exp(max(seg.avg_logprob, -3.0)), 2)
                     segments.append(TranscriptSegment(
                         id=str(uuid.uuid4()),
@@ -122,16 +149,24 @@ class PyAVWhisperASRProvider(ASRProvider):
         try:
             import whisper
             model = whisper.load_model(self.model_size)
-            result = model.transcribe(media_path, language="en")
+            result = model.transcribe(
+                media_path,
+                language="en",
+                initial_prompt=DOMAIN_INITIAL_PROMPT
+            )
             segments = []
             for seg in result.get("segments", []):
+                text = seg["text"].strip()
+                if not text:
+                    continue
+                text = normalize_domain_lexicon(text)
                 segments.append(TranscriptSegment(
                     id=str(uuid.uuid4()),
                     source_id=source_id,
                     start_seconds=round(float(seg["start"]), 2),
                     end_seconds=round(float(seg["end"]), 2),
                     speaker="Speaker 1",
-                    text=seg["text"].strip(),
+                    text=text,
                     confidence=round(float(seg.get("confidence", 0.95)), 2),
                     language="en"
                 ))

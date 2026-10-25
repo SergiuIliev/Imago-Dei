@@ -173,19 +173,41 @@ class HybridRetrievalProvider:
         if not era_filter:
             return True
         if not date_occurred:
+            return False
+
+        filter_clean = era_filter.strip().lower()
+        date_clean = date_occurred.strip().lower()
+
+        # Extract 4-digit years from date_occurred
+        date_years = [int(y) for y in re.findall(r'\b(19\d\d|20\d\d)\b', date_clean)]
+
+        # Specific handling for "present" / "present day"
+        if filter_clean in ("present", "present day", "current", "now"):
+            if date_years:
+                return date_years[0] >= 2026
+            return "present" in date_clean
+
+        # Direct substring match (e.g. "2023-04-22" matches "2023")
+        if filter_clean in date_clean:
             return True
-        # Direct substring match
-        if era_filter.lower() in date_occurred.lower():
-            return True
-        # Year range extraction (e.g. "2014-2018", "2023-Present")
-        era_years = re.findall(r'\b(19\d\d|20\d\d)\b', era_filter)
-        date_years = re.findall(r'\b(19\d\d|20\d\d)\b', date_occurred)
+
+        # Extract 4-digit years from era_filter
+        era_years = [int(y) for y in re.findall(r'\b(19\d\d|20\d\d)\b', filter_clean)]
+
         if era_years and date_years:
-            d_year = int(date_years[0])
-            start_yr = int(era_years[0])
-            end_yr = int(era_years[1]) if len(era_years) > 1 else (9999 if "present" in era_filter.lower() else start_yr)
-            return start_yr <= d_year <= end_yr
-        return True
+            d_year = date_years[0]
+            if len(era_years) == 1:
+                if "present" in filter_clean:
+                    return d_year >= era_years[0]
+                else:
+                    return d_year == era_years[0]
+            else:
+                return era_years[0] <= d_year <= era_years[1]
+
+        if "present" in filter_clean and date_years:
+            return date_years[0] >= 2026
+
+        return False
 
     def retrieve(
         self,

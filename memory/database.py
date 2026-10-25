@@ -210,6 +210,22 @@ class DatabaseManager:
                 return MediaSource.from_dict(dict(row))
         return None
 
+    def get_media_by_path_and_size(self, file_path: str, file_size_bytes: int) -> Optional[MediaSource]:
+        with self.get_connection() as conn:
+            file_name = Path(file_path).name
+            row = conn.execute(
+                "SELECT * FROM media_sources WHERE (file_path = ? OR file_path LIKE ?) AND file_size_bytes = ?",
+                (file_path, f"%/{file_name}", file_size_bytes)
+            ).fetchone()
+            if row:
+                media = MediaSource.from_dict(dict(row))
+                if media.file_path != file_path:
+                    conn.execute("UPDATE media_sources SET file_path = ? WHERE id = ?", (file_path, media.id))
+                    conn.commit()
+                    media.file_path = file_path
+                return media
+        return None
+
     def get_media_by_id(self, media_id: str) -> Optional[MediaSource]:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM media_sources WHERE id = ?", (media_id,)).fetchone()

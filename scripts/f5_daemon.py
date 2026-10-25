@@ -17,10 +17,24 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-# Ensure deterministic hash seed and execution path
-if "PYTHONHASHSEED" not in os.environ or not os.environ.get("PYTHONHASHSEED", "").isdigit():
-    os.environ["PYTHONHASHSEED"] = "0"
-os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+# Ensure deterministic 32-bit hash seed and execution path with ffmpeg support
+os.environ["PYTHONHASHSEED"] = "0"
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+try:
+    import imageio_ffmpeg
+    ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+    os.environ["PATH"] = f"{ffmpeg_dir}:/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+except Exception:
+    os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+
+import random
+# Protect against upstream F5-TTS 64-bit seed overflow bug on macOS ARM64
+import f5_tts.model.utils as f5_utils
+_orig_seed_everything = f5_utils.seed_everything
+def _safe_seed_everything(seed=0):
+    safe_seed = int(seed) % 4294967295
+    _orig_seed_everything(safe_seed)
+f5_utils.seed_everything = _safe_seed_everything
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -56,14 +70,18 @@ class F5TTSDaemonEngine:
         self.is_ready = False
         self.lock = threading.Lock()
         self.reference_clips: Dict[str, Dict[str, Any]] = {}
+        self.emotion_era_matrix: Dict[str, Dict[str, str]] = {}
+        self.canonical_emotion_map: Dict[str, str] = {}
         self._load_reference_clips()
 
     def _load_reference_clips(self):
-        """Loads and indexes reference audio clips and transcripts."""
+        """Loads and indexes reference audio clips, transcripts, and emotion-era matrices."""
         if REF_MANIFEST.exists():
             try:
                 with open(REF_MANIFEST, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                self.emotion_era_matrix = data.get("emotion_era_matrix", {})
+                self.canonical_emotion_map = data.get("canonical_emotion_map", {})
                 for clip in data.get("clips", []):
                     cid = clip.get("clip_id")
                     cpath = clip.get("path")
@@ -71,7 +89,9 @@ class F5TTSDaemonEngine:
                         self.reference_clips[cid] = {
                             "path": cpath,
                             "text": clip.get("text", ""),
-                            "duration": clip.get("duration_seconds", 0.0)
+                            "duration": clip.get("duration_seconds", 0.0),
+                            "emotion": clip.get("emotion", "neutral"),
+                            "era": clip.get("era", "canonical")
                         }
             except Exception as e:
                 print(f"[Daemon] Warning loading reference manifest: {e}", file=sys.stderr)
@@ -118,15 +138,43 @@ class F5TTSDaemonEngine:
         print(f"[Daemon] Metal MPS warm initialization complete in {elapsed:.2f}s. Model: {self.model_name}")
 
     def resolve_reference(self, ref_id: str) -> tuple[str, str]:
-        """Resolves reference audio file and conditioning text from clip ID or emotion name."""
-        target_id = ref_id.lower().strip()
-        # Check emotion aliases
-        if target_id in EMOTION_REFERENCE_MAP:
-            target_id = EMOTION_REFERENCE_MAP[target_id]
+        """Resolves reference audio file and conditioning text from clip ID, emotion name, or era combination."""
+        target = ref_id.lower().strip()
 
-        if target_id in self.reference_clips:
-            clip = self.reference_clips[target_id]
+        # Direct clip ID match (e.g. "ref_01", "ref_15")
+        if target in self.reference_clips:
+            clip = self.reference_clips[target]
             return clip["path"], clip["text"]
+
+        # Composite emotion and era match (e.g. "reflective_2024", "2024_reflective")
+        parts = [p for p in target.replace("-", "_").split("_") if p]
+        emo = None
+        era = None
+        for p in parts:
+            if p in ["reflective", "humorous", "lively", "curious", "serious", "melancholic", "neutral"]:
+                emo = p
+            elif p in ["2023", "2024", "2025", "2026", "canonical"]:
+                era = p
+
+        if emo and era and emo in self.emotion_era_matrix:
+            mapped_cid = self.emotion_era_matrix[emo].get(era)
+            if mapped_cid and mapped_cid in self.reference_clips:
+                clip = self.reference_clips[mapped_cid]
+                return clip["path"], clip["text"]
+
+        # Canonical emotion mapping lookup
+        if target in self.canonical_emotion_map:
+            cid = self.canonical_emotion_map[target]
+            if cid in self.reference_clips:
+                clip = self.reference_clips[cid]
+                return clip["path"], clip["text"]
+
+        # Standard emotion alias map
+        if target in EMOTION_REFERENCE_MAP:
+            cid = EMOTION_REFERENCE_MAP[target]
+            if cid in self.reference_clips:
+                clip = self.reference_clips[cid]
+                return clip["path"], clip["text"]
 
         # Default fallback
         if "ref_02" in self.reference_clips:
@@ -187,7 +235,8 @@ class F5TTSDaemonEngine:
                 gen_text=clean_text,
                 file_wave=str(out_p),
                 speed=speed,
-                nfe_step=steps
+                nfe_step=steps,
+                seed=random.randint(0, 4294967295)
             )
         elapsed = time.time() - t0
 

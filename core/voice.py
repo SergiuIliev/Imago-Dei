@@ -18,17 +18,45 @@ from core.models import ExpressiveDeliveryParams, EmotionCategory
 EMOTION_REFERENCE_MAP: Dict[str, str] = {
     EmotionCategory.REFLECTIVE.value: "ref_02",  # 9.04s, reflective, philosophical cadence (F0: 135.6 Hz)
     EmotionCategory.HUMOROUS.value: "ref_10",    # 4.00s, playful, light British accent remark (F0: 145.5 Hz)
-    EmotionCategory.LIVELY.value: "ref_10",      # 4.00s, energetic cadence (165 WPM), crisp articulation
+    EmotionCategory.LIVELY.value: "ref_10",      # 4.00s, energetic cadence (165 WPM), crisp articulation (canonical ref_05/ref_10)
     EmotionCategory.CURIOUS.value: "ref_04",     # 5.00s, "Another thing that I found quite interesting..."
     EmotionCategory.SERIOUS.value: "ref_01",     # 8.48s, resolute, grounded determination ("important is that if I fail...")
     EmotionCategory.MELANCHOLIC.value: "ref_03", # 7.00s, subdued, low pitch (F0: 117.6 Hz), reflective
     EmotionCategory.NEUTRAL.value: "ref_09",     # 5.00s, steady, calm, objective cadence ("guaranteed price...")
 }
 
+# 35-clip Emotion x Era Reference Matrix (7 emotions across 2023-2026 + canonical)
+EMOTION_ERA_REFERENCE_MAP: Dict[str, Dict[str, str]] = {
+    EmotionCategory.REFLECTIVE.value: {"canonical": "ref_02", "2023": "ref_06", "2024": "ref_07", "2025": "ref_08", "2026": "ref_11"},
+    EmotionCategory.HUMOROUS.value: {"canonical": "ref_10", "2023": "ref_12", "2024": "ref_13", "2025": "ref_14", "2026": "ref_15"},
+    EmotionCategory.LIVELY.value: {"canonical": "ref_05", "2023": "ref_16", "2024": "ref_17", "2025": "ref_18", "2026": "ref_19"},
+    EmotionCategory.CURIOUS.value: {"canonical": "ref_04", "2023": "ref_20", "2024": "ref_21", "2025": "ref_22", "2026": "ref_23"},
+    EmotionCategory.SERIOUS.value: {"canonical": "ref_01", "2023": "ref_24", "2024": "ref_25", "2025": "ref_26", "2026": "ref_27"},
+    EmotionCategory.MELANCHOLIC.value: {"canonical": "ref_03", "2023": "ref_28", "2024": "ref_29", "2025": "ref_30", "2026": "ref_31"},
+    EmotionCategory.NEUTRAL.value: {"canonical": "ref_09", "2023": "ref_32", "2024": "ref_33", "2025": "ref_34", "2026": "ref_35"},
+}
 
-def get_reference_clip_for_emotion(emotion: Union[EmotionCategory, str]) -> str:
-    """Returns the most acoustically appropriate reference clip ID for an emotion."""
+
+def get_reference_clip_for_emotion(
+    emotion: Union[EmotionCategory, str],
+    era: Optional[str] = None
+) -> str:
+    """
+    Returns the most acoustically appropriate reference clip ID for an emotion and optional era.
+    Supports era-specific matching across 2023-2026 from the 35-clip reference matrix.
+    """
     key = emotion.value if isinstance(emotion, EmotionCategory) else str(emotion).lower()
+    if era:
+        era_str = str(era).lower().replace("era", "").strip()
+        era_key = None
+        for y in ["2023", "2024", "2025", "2026", "canonical"]:
+            if y in era_str:
+                era_key = y
+                break
+        if era_key and key in EMOTION_ERA_REFERENCE_MAP:
+            clip = EMOTION_ERA_REFERENCE_MAP[key].get(era_key)
+            if clip:
+                return clip
     return EMOTION_REFERENCE_MAP.get(key, "ref_02")
 
 
@@ -45,17 +73,27 @@ EMOTION_CRITERIA: Dict[str, str] = {
 
 def select_emotion_and_reference_jev(
     text: str,
-    jev_engine: Optional[Any] = None
+    jev_engine: Optional[Any] = None,
+    era: Optional[str] = None,
+    **kwargs: Any
 ) -> Tuple[EmotionCategory, str, Dict[str, Any]]:
     """
     Selects the optimal EmotionCategory and reference clip using Jev Choice primitive.
+    Supports era-aware reference selection across the 35-clip reference matrix.
     Falls back cleanly to get_reference_clip_for_emotion and heuristic detection if Jev engine is unavailable.
     """
-    if jev_engine is not None:
+    # Disambiguate if jev_engine was passed as a string era: e.g. select_emotion_and_reference_jev(text, "2024")
+    effective_jev = jev_engine
+    effective_era = era or kwargs.get("era")
+    if isinstance(jev_engine, str) and effective_era is None:
+        effective_era = jev_engine
+        effective_jev = kwargs.get("jev_engine")
+
+    if effective_jev is not None:
         try:
-            is_avail = not hasattr(jev_engine, "is_available") or jev_engine.is_available()
+            is_avail = not hasattr(effective_jev, "is_available") or effective_jev.is_available()
             if is_avail:
-                choice_res = jev_engine.Choice(
+                choice_res = effective_jev.Choice(
                     instructions="Select the most appropriate emotional tone and vocal delivery for this spoken text.",
                     criteria=EMOTION_CRITERIA,
                     context=text
@@ -65,30 +103,30 @@ def select_emotion_and_reference_jev(
                     category = EmotionCategory(chosen_key)
                 except ValueError:
                     category = EmotionCategory.NEUTRAL
-                clip_id = EMOTION_REFERENCE_MAP.get(category.value, "ref_02")
+                clip_id = get_reference_clip_for_emotion(category, era=effective_era)
                 return (category, clip_id, dict(choice_res))
         except Exception:
             pass
 
     # Heuristic fallback
     text_lower = text.lower()
-    if "laugh" in text_lower or "funny" in text_lower or "joke" in text_lower:
+    if any(w in text_lower for w in ["laugh", "funny", "joke", "playful", "amused", "smile", "chuckle", "british"]):
         cat = EmotionCategory.HUMOROUS
-    elif "curious" in text_lower or "wonder" in text_lower or "interesting" in text_lower:
+    elif any(w in text_lower for w in ["curious", "wonder", "interesting", "puzzle", "fascinating", "why"]):
         cat = EmotionCategory.CURIOUS
-    elif "fail" in text_lower or "resilience" in text_lower or "discipline" in text_lower or "focus" in text_lower:
+    elif any(w in text_lower for w in ["fail", "resilience", "discipline", "focus", "duty", "responsibility", "critical"]):
         cat = EmotionCategory.SERIOUS
-    elif "remember" in text_lower or "vision" in text_lower or "compounding" in text_lower or "reflect" in text_lower:
+    elif any(w in text_lower for w in ["remember", "vision", "compounding", "reflect", "future", "past", "growth", "mindset"]):
         cat = EmotionCategory.REFLECTIVE
-    elif "excited" in text_lower or "great" in text_lower or "awesome" in text_lower:
+    elif any(w in text_lower for w in ["excited", "great", "awesome", "amazing", "energy", "love"]):
         cat = EmotionCategory.LIVELY
-    elif "sad" in text_lower or "difficult" in text_lower or "hard" in text_lower:
+    elif any(w in text_lower for w in ["sad", "difficult", "hard", "pain", "struggle", "loss", "tired"]):
         cat = EmotionCategory.MELANCHOLIC
     else:
         cat = EmotionCategory.NEUTRAL
 
-    clip_id = get_reference_clip_for_emotion(cat)
-    return (cat, clip_id, {"choice": cat.value, "confidence": 0.85, "fallback": True})
+    clip_id = get_reference_clip_for_emotion(cat, era=effective_era)
+    return (cat, clip_id, {"choice": cat.value, "confidence": 0.85, "fallback": True, "era": effective_era})
 
 
 def sanitize_spoken_text(
@@ -206,9 +244,9 @@ class VoiceProfile:
     speaker_name: str = "Sergiu"
     is_cloned_from_personal_media: bool = False # Set to True when personal reference media is loaded
     reference_audio_clips: List[str] = field(default_factory=list)
-    average_speaking_rate_wpm: int = 121 # Empirically measured from 22 authentic vlogs (121.3 WPM)
-    baseline_pitch_hz: float = 136.8 # Empirically measured median F0 from authentic speech
-    pitch_range_hz: tuple = (119.4, 188.2) # 10th to 90th percentile measured pitch
+    average_speaking_rate_wpm: int = 136 # Empirically measured from 4-year vlog corpus (136.3 WPM)
+    baseline_pitch_hz: float = 132.6 # Empirically measured median F0 from authentic speech corpus
+    pitch_range_hz: tuple = (117.5, 143.4) # 10th to 90th percentile measured pitch across corpus
     characteristic_mannerisms: List[str] = field(default_factory=lambda: [
         "Thoughtful, articulate cadence with natural pauses",
         "Calm baritone resonance with subtle melodic rise on analytical insights",
@@ -236,6 +274,10 @@ class VoiceProfile:
                 if prof:
                     self.average_speaking_rate_wpm = int(round(prof.get("average_wpm", self.average_speaking_rate_wpm)))
                     self.baseline_pitch_hz = float(prof.get("median_pitch_hz", self.baseline_pitch_hz))
+                    p10 = prof.get("pitch_10th_percentile_hz")
+                    p90 = prof.get("pitch_90th_percentile_hz")
+                    if p10 is not None and p90 is not None:
+                        self.pitch_range_hz = (float(p10), float(p90))
                 clips = data.get("clips", [])
                 valid_paths = [c["path"] for c in clips if Path(c.get("path", "")).exists()]
                 if valid_paths:
@@ -264,12 +306,13 @@ class ExpressiveDeliveryController:
     def prepare_text_and_timing(
         self,
         text: str,
-        params: ExpressiveDeliveryParams
+        params: ExpressiveDeliveryParams,
+        era: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Transforms raw text into expressive speech script with pause timing,
         sanitizing stage directions, calculating words-per-minute, pitch adjustments,
-        and dynamically selecting the reference clip for the emotion.
+        and dynamically selecting the reference clip for the emotion and optional era.
         """
         preset = self.profile.emotion_presets.get(params.emotion.value, {})
         rate_multiplier = params.speech_rate * preset.get("rate_multiplier", 1.0)
@@ -292,8 +335,9 @@ class ExpressiveDeliveryController:
         effective_wpm = int(self.profile.average_speaking_rate_wpm * rate_multiplier)
         effective_wpm = max(90, min(240, effective_wpm))
 
-        # Dynamically map emotion to reference clip
-        ref_clip_id = get_reference_clip_for_emotion(params.emotion)
+        # Dynamically map emotion and optional era to reference clip
+        target_era = era or getattr(params, "era", None)
+        ref_clip_id = get_reference_clip_for_emotion(params.emotion, era=target_era)
 
         return {
             "processed_text": processed_text,

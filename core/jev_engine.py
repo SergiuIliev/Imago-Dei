@@ -414,6 +414,55 @@ class LocalJevEngine:
                     verdict = True
                     confidence = 0.80
 
+            # 4. Temporal consistency check
+            elif "chronological consistency" in instr_lower or "temporal consistency" in instr_lower or "anachronistically" in instr_lower:
+                anachronism_detected = False
+                requested_year = None
+                era_match = re.search(r'(?:era_)?(20\d\d|early_20s|mid_late_20s)', full_context.lower())
+                if era_match:
+                    val = era_match.group(1)
+                    if val == "early_20s":
+                        requested_year = 2018
+                    elif val == "mid_late_20s":
+                        requested_year = 2022
+                    elif val.isdigit():
+                        requested_year = int(val)
+
+                if requested_year and requested_year < 2026:
+                    draft_years = [int(y) for y in re.findall(r'\b(20\d\d)\b', full_context)]
+                    future_years = [y for y in draft_years if y > requested_year]
+                    if future_years:
+                        for fy in future_years:
+                            if re.search(rf'\b(?:in|by|during|after|since|deployed|built|launched|completed|have|now)\s+{fy}\b', full_context, re.IGNORECASE) or \
+                               re.search(rf'\b{fy}\s+(?:was|is|brought|saw|allowed|enabled)\b', full_context, re.IGNORECASE):
+                                anachronism_detected = True
+                                break
+
+                    # Milestone checks for past eras
+                    if requested_year <= 2023:
+                        future_tokens = ["cudy p5", "tesla telemetry", "lakeon", ".69 static", "brâncuși", "brancusi"]
+                        for tok in future_tokens:
+                            if tok in full_context.lower() and not ("in the future" in full_context.lower() or "one day" in full_context.lower() or "will" in full_context.lower()):
+                                anachronism_detected = True
+                                break
+                    elif requested_year <= 2024:
+                        future_tokens = ["cudy p5", "tesla telemetry sync", "lakeon brasov"]
+                        for tok in future_tokens:
+                            if tok in full_context.lower() and not ("in the future" in full_context.lower() or "will" in full_context.lower()):
+                                anachronism_detected = True
+                                break
+
+                if anachronism_detected:
+                    noul = 0.20
+                    verdict = False
+                    confidence = 0.88
+                    reasoning = "Draft contains anachronistic claims of future events or milestones beyond the requested era."
+                else:
+                    noul = 0.95
+                    verdict = True
+                    confidence = 0.92
+                    reasoning = "Draft respects chronological boundaries of the active era."
+
         # Enforce mathematical invariants
         noul = max(0.0, min(1.0, float(noul)))
         verdict = bool(noul >= 0.5)
@@ -616,10 +665,12 @@ class LocalJevEngine:
         evidence_texts: List[str],
         beliefs_summary: str,
         has_sufficient_evidence: bool,
-        draft_response: str
+        draft_response: str,
+        era_id: Optional[str] = None
     ) -> str:
         """
-        Rewrites/repairs the draft response to be 100% grounded and compliant with honest uncertainty.
+        Rewrites/repairs the draft response to be 100% grounded, compliant with honest uncertainty,
+        and chronologically consistent with the active era.
         """
         if not has_sufficient_evidence:
             return (
@@ -630,13 +681,18 @@ class LocalJevEngine:
         # When evidence is present, sanitize and repair
         clean_draft = sanitize_text(draft_response)
 
+        era_clause = ""
+        if era_id:
+            era_clause = f"\n5. CHRONOLOGICAL CONSISTENCY: Maintain the perspective of era '{era_id}'. Never claim future events or technologies from subsequent years have already occurred."
+
         sys_prompt = (
-            "You are Sergiu Iliev. Your task is to rewrite the draft response so that it is 100% faithful to the authentic archive evidence and personal beliefs.\n"
+            "You are Sergiu Iliev. Your task is to rewrite the draft response so that it is 100% faithful to the authentic archive evidence, personal beliefs, and chronological era.\n"
             "Strict rules:\n"
             "1. Speak directly in natural first-person (\"I\", \"my\").\n"
             "2. Stick strictly to provided evidence without inventing unrecorded biographical facts or dates.\n"
             "3. NEVER include theatrical stage directions (e.g. *smiles*, (chuckles), (pauses)).\n"
             "4. NEVER include AI disclaimers (e.g. \"As an AI...\")."
+            f"{era_clause}"
         )
         user_prompt = (
             f"User asks: \"{query}\"\n\n"
@@ -652,6 +708,16 @@ class LocalJevEngine:
                 return sanitize_text(repaired)
         except Exception:
             pass
+
+        # Offline fallback: eliminate anachronistic future claims if past era requested
+        if era_id:
+            repaired_draft = clean_draft
+            for yr in ["2026", "2025", "2024"]:
+                if era_id in ["era_2023", "2023"] and yr in ["2024", "2025", "2026"]:
+                    repaired_draft = re.sub(rf'\b(?:in|by|since)\s+{yr}[^.]*\.', '', repaired_draft, flags=re.IGNORECASE)
+                elif era_id in ["era_2024", "2024"] and yr in ["2025", "2026"]:
+                    repaired_draft = re.sub(rf'\b(?:in|by|since)\s+{yr}[^.]*\.', '', repaired_draft, flags=re.IGNORECASE)
+            return sanitize_text(repaired_draft) if repaired_draft.strip() else clean_draft
 
         return clean_draft
 
@@ -679,11 +745,12 @@ class DualModelVerifier:
         evidence_texts: List[str],
         beliefs_summary: str,
         has_sufficient_evidence: bool,
-        draft_response: str
+        draft_response: str,
+        era_id: Optional[str] = None
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Cross-checks Model 1's draft against Model 2 (Critic) using Jev primitives.
-        Executes self-correction loop if grounding or honest uncertainty thresholds are violated.
+        Executes self-correction loop if grounding, honest uncertainty, or temporal consistency thresholds are violated.
         Returns: (final_response_text, verification_telemetry)
         """
         start_time = time.perf_counter()
@@ -719,12 +786,20 @@ class DualModelVerifier:
             context=draft_response
         )
 
+        # 4. Evaluate Temporal Consistency via Noul (when era is specified)
+        temporal_consistent = None
+        if era_id:
+            temporal_consistent = self.critic_engine.Noul(
+                instructions=f"Does the draft maintain strict chronological consistency for era {era_id}, ensuring it does not anachronistically claim events, systems, or milestones from future years have already occurred?",
+                context=f"ACTIVE_ERA: {era_id}\nDRAFT RESPONSE: {draft_response}\nARCHIVE EVIDENCE:\n{evidence_block}"
+            )
+
         # Check self-correction thresholds:
-        # is_grounded.noul >= 0.75, honest_uncertainty_respected.noul >= 0.75, persona_authentic.score >= 0.60
         passed_first_try = (
             is_grounded.noul >= 0.75 and
             honest_uncertainty_respected.noul >= 0.75 and
-            persona_authentic.score >= 0.60
+            persona_authentic.score >= 0.60 and
+            (temporal_consistent.noul >= 0.75 if temporal_consistent is not None else True)
         )
 
         final_text = draft_response
@@ -737,23 +812,30 @@ class DualModelVerifier:
                 evidence_texts=evidence_texts,
                 beliefs_summary=beliefs_summary,
                 has_sufficient_evidence=has_sufficient_evidence,
-                draft_response=draft_response
+                draft_response=draft_response,
+                era_id=era_id
             )
             repaired = True
 
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
+        noul_scores = {
+            "is_grounded": round(float(is_grounded.noul), 3),
+            "honest_uncertainty_respected": round(float(honest_uncertainty_respected.noul), 3),
+            "persona_authentic": round(float(persona_authentic.score), 3)
+        }
+        if temporal_consistent is not None:
+            noul_scores["temporal_consistent"] = round(float(temporal_consistent.noul), 3)
+
         telemetry: Dict[str, Any] = {
             "primary_model": self.primary_model,
             "critic_model": self.critic_model,
-            "noul_scores": {
-                "is_grounded": round(float(is_grounded.noul), 3),
-                "honest_uncertainty_respected": round(float(honest_uncertainty_respected.noul), 3),
-                "persona_authentic": round(float(persona_authentic.score), 3)
-            },
+            "noul_scores": noul_scores,
             "passed_first_try": passed_first_try,
             "repaired": repaired,
             "latency_ms": latency_ms
         }
+        if era_id:
+            telemetry["era_id"] = era_id
 
         return (final_text, telemetry)

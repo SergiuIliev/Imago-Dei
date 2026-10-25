@@ -98,14 +98,19 @@ class MediaIngestionPipeline:
         return sorted(found)
 
     def extract_metadata_pyav(self, file_path: str) -> Dict[str, Any]:
-        """Extracts container duration, bitrate, video/audio stream properties using PyAV."""
+        """Extracts container duration, bitrate, video/audio stream properties, creation_time, GPS using PyAV."""
         metadata = {
             "duration_seconds": 0.0,
             "has_video": False,
             "has_audio": False,
             "audio_sample_rate": 0,
             "video_codec": None,
-            "audio_codec": None
+            "audio_codec": None,
+            "creation_time": None,
+            "location": None,
+            "latitude": None,
+            "longitude": None,
+            "container_metadata": {}
         }
         try:
             import av
@@ -123,6 +128,23 @@ class MediaIngestionPipeline:
                     metadata["has_audio"] = True
                     metadata["audio_codec"] = audio_stream.name
                     metadata["audio_sample_rate"] = audio_stream.rate
+
+                if container.metadata:
+                    metadata["container_metadata"] = dict(container.metadata)
+                    if "creation_time" in container.metadata:
+                        metadata["creation_time"] = container.metadata["creation_time"]
+
+                    loc_str = container.metadata.get("location") or container.metadata.get("location-eng")
+                    if loc_str:
+                        metadata["location"] = loc_str
+                        import re
+                        m = re.match(r'([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)/?', loc_str)
+                        if m:
+                            try:
+                                metadata["latitude"] = float(m.group(1))
+                                metadata["longitude"] = float(m.group(2))
+                            except ValueError:
+                                pass
         except Exception as e:
             metadata["error"] = str(e)
             metadata["duration_seconds"] = 1.0 # fallback
@@ -146,6 +168,27 @@ class MediaIngestionPipeline:
         if not p.exists():
             return {"status": "error", "error": f"File not found: {file_path}"}
 
+        file_size = os.path.getsize(file_path)
+
+        # Pre-flight size check: if file_size_bytes < 4096 (e.g. VID_20230623_081134.mp4, 168 bytes), mark as quarantined_corrupt_stub and skip
+        if file_size < 4096:
+            return {
+                "status": "quarantined_corrupt_stub",
+                "file_name": p.name,
+                "file_size_bytes": file_size,
+                "message": "File size < 4096 bytes; corrupt stub quarantined and skipped."
+            }
+
+        # Fast composite hash deduplication: check if (file_path, file_size_bytes) is already indexed with status=INDEXED before computing full SHA256
+        existing_by_path_size = self.db.get_media_by_path_and_size(str(p.resolve()), file_size)
+        if existing_by_path_size and existing_by_path_size.status == MediaStatus.INDEXED:
+            return {
+                "status": "duplicate_skipped",
+                "media_id": existing_by_path_size.id,
+                "file_name": p.name,
+                "message": "File (path and size) already processed and indexed in local database."
+            }
+
         file_hash = compute_sha256(file_path)
         existing_media = self.db.get_media_by_hash(file_hash)
 
@@ -159,15 +202,31 @@ class MediaIngestionPipeline:
 
         # Create or update media record
         media_id = existing_media.id if existing_media else str(uuid.uuid4())
-        file_size = os.path.getsize(file_path)
         meta = self.extract_metadata_pyav(file_path)
 
-        # Parse recording timestamp from filename
+        # Parse recording timestamp from filename; fallback to container creation_time
         recorded_at_iso, date_str = parse_recording_timestamp(file_path)
+        if not recorded_at_iso and meta.get("creation_time"):
+            ct = meta["creation_time"]
+            recorded_at_iso = ct
+            if len(ct) >= 10 and ct[0:4].isdigit() and ct[4] in ("-", "/"):
+                date_str = ct[:10].replace("/", "-")
+            elif len(ct) >= 8 and ct[0:8].isdigit():
+                date_str = f"{ct[0:4]}-{ct[4:6]}-{ct[6:8]}"
+        if not recorded_at_iso:
+            try:
+                mtime = os.path.getmtime(file_path)
+                mtime_dt = datetime.utcfromtimestamp(mtime)
+                recorded_at_iso = mtime_dt.isoformat() + "Z"
+                date_str = mtime_dt.strftime("%Y-%m-%d")
+            except Exception:
+                date_str = "unknown_date"
+
         meta["date_occurred"] = date_str
 
         # Demux and extract 16kHz mono WAV locally into audio_cache so training,
         # voice reference conditioning, and audio playback stay available offline
+        cached_audio_path = None
         try:
             audio_dir = Path(self.config.storage.audio_output_dir)
             audio_dir.mkdir(parents=True, exist_ok=True)
@@ -194,8 +253,9 @@ class MediaIngestionPipeline:
         self.db.upsert_media(media)
 
         try:
-            # 2. Transcription
-            segments = self.asr.transcribe(file_path, media_id)
+            # 2. Transcription: pass local 16kHz WAV in audio_cache directly into transcribe() to avoid USB double-decode
+            audio_transcribe_target = str(cached_audio_path) if (cached_audio_path and cached_audio_path.exists()) else file_path
+            segments = self.asr.transcribe(audio_transcribe_target, media_id)
             if not segments:
                 raise ValueError(f"No speech utterances transcribed from {p.name}")
 
@@ -205,8 +265,19 @@ class MediaIngestionPipeline:
             self.db.upsert_media(media)
 
             # 3. Memory Extraction & Indexing
-            # Verified personal recording tier
-            v_status = VerificationStatus.SYNTHETIC_FIXTURE if is_synthetic_fixture else VerificationStatus.PERSONAL_VERIFIED
+            # Quarantine synthetic translation dubs: Detect 'Korean Speech.mp4' and 'Speaking Spanish.mp4'
+            SYNTHETIC_DUBS = {"Korean Speech.mp4", "Speaking Spanish.mp4"}
+            is_synthetic = is_synthetic_fixture or (p.name in SYNTHETIC_DUBS)
+            v_status = VerificationStatus.SYNTHETIC_FIXTURE if is_synthetic else VerificationStatus.PERSONAL_VERIFIED
+
+            if is_synthetic:
+                chunk_tags = ["multilingual_experiment", "synthetic_dub"]
+            else:
+                chunk_tags = ["personal_vlog", "pixel_recording"]
+            if date_str:
+                chunk_tags.append(f"date:{date_str}")
+            else:
+                chunk_tags.append("vlog")
 
             memories_created: List[MemoryItem] = []
             
@@ -237,18 +308,17 @@ class MediaIngestionPipeline:
                         id=str(uuid.uuid4()),
                         content=combined,
                         summary=summary,
-                        category="personal_reflection",
+                        category="multilingual_experiment" if is_synthetic else "personal_reflection",
                         date_occurred=date_str or p.stem,
                         source_id=media_id,
                         start_seconds=round(current_start, 2),
                         end_seconds=round(current_end, 2),
                         verification_status=v_status,
                         confidence=round(avg_conf, 2),
-                        emotional_tone="reflective",
-                        tags=["personal_vlog", "pixel_recording", f"date:{date_str}" if date_str else "vlog"]
+                        emotional_tone="neutral" if is_synthetic else "reflective",
+                        tags=list(chunk_tags)
                     )
                     self.db.add_memory(mem)
-                    self.vector_store.add_memory_embedding(mem)
                     memories_created.append(mem)
                     current_chunk_text = []
                     current_start = None
@@ -265,19 +335,22 @@ class MediaIngestionPipeline:
                         id=str(uuid.uuid4()),
                         content=combined,
                         summary=summary,
-                        category="personal_reflection",
+                        category="multilingual_experiment" if is_synthetic else "personal_reflection",
                         date_occurred=date_str or p.stem,
                         source_id=media_id,
                         start_seconds=round(current_start, 2),
                         end_seconds=round(current_end, 2),
                         verification_status=v_status,
                         confidence=round(avg_conf, 2),
-                        emotional_tone="reflective",
-                        tags=["personal_vlog", "pixel_recording", f"date:{date_str}" if date_str else "vlog"]
+                        emotional_tone="neutral" if is_synthetic else "reflective",
+                        tags=list(chunk_tags)
                     )
                     self.db.add_memory(mem)
-                    self.vector_store.add_memory_embedding(mem)
                     memories_created.append(mem)
+
+            # Batch index embeddings into Chroma
+            if memories_created:
+                self.vector_store.add_batch_memory_embeddings(memories_created)
 
             media.status = MediaStatus.INDEXED
             self.db.upsert_media(media)

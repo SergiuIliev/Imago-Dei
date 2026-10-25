@@ -2,11 +2,12 @@
 """
 Dedicated Batch Ingestion Runner for Project 30 (Personal AI Time Capsule).
 Ingests authentic personal vlog recordings from connected external SSD:
-/Volumes/SSD/Photography/_Speak_Project
+/Volumes/SSD/Photography/_Daily Speak Project
 
-Persists all extracted metadata, transcripts, narrative memories, embeddings,
-and 16kHz audio clips locally on-device so the Time Capsule functions
-completely offline even when the external SSD is disconnected.
+Persists all extracted metadata, container creation timestamps, GPS coordinates,
+granular transcripts with domain lexicon normalization, narrative memories,
+Chroma vector embeddings, and 16kHz audio clips locally on-device so the
+Time Capsule functions completely offline even when the external SSD is disconnected.
 """
 
 import sys
@@ -27,7 +28,7 @@ from ingestion.pipeline import MediaIngestionPipeline
 
 
 def main():
-    target_dir = sys.argv[1] if len(sys.argv) > 1 else "/Volumes/SSD/Photography/_Speak_Project"
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else "/Volumes/SSD/Photography/_Daily Speak Project"
     
     print("\n" + "=" * 70)
     print(" PROJECT 30: PERSONAL AI TIME CAPSULE — AUTONOMOUS INGESTION")
@@ -68,6 +69,7 @@ def main():
 
     processed_count = 0
     skipped_count = 0
+    quarantined_count = 0
     failed_count = 0
     total_transcripts_added = 0
     total_memories_added = 0
@@ -76,7 +78,7 @@ def main():
     for i, file_path in enumerate(files, 1):
         f_name = file_path.name
         f_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-        print(f"[{i:02d}/{total_files:02d}] {f_name} ({f_size_mb:.1f} MB)... ", end="", flush=True)
+        print(f"[{i:03d}/{total_files:03d}] {f_name} ({f_size_mb:.1f} MB)... ", end="", flush=True)
 
         t_file_start = time.time()
         res = pipeline.process_file(str(file_path))
@@ -86,20 +88,35 @@ def main():
         if status == "duplicate_skipped":
             skipped_count += 1
             print(f"⏩ [SKIP: Already indexed in DB]")
+        elif status == "quarantined_corrupt_stub":
+            quarantined_count += 1
+            print(f"⚠️ [QUARANTINED: Corrupt stub <4KB]")
         elif status == "success":
             processed_count += 1
             segs = res.get("transcript_segments", 0)
             mems = res.get("memories_created", 0)
             rec_date = res.get("recorded_at") or "unknown date"
+            v_status = res.get("verification_status", "personal_verified")
             total_transcripts_added += segs
             total_memories_added += mems
-            print(f"✅ [INDEXED] {segs} utterances, {mems} memories, recorded {rec_date[:10]} ({t_file_elapsed:.1f}s)")
+            status_tag = "SYNTHETIC_FIXTURE" if "synthetic" in v_status else "INDEXED"
+            print(f"✅ [{status_tag}] {segs} utterances, {mems} memories, recorded {rec_date[:10]} ({t_file_elapsed:.1f}s)")
         else:
             failed_count += 1
             err = res.get("error", "Unknown error")
             print(f"❌ [FAILED] {err}")
 
     total_elapsed = time.time() - start_time
+
+    # Checkpoint WAL and verify unlock
+    try:
+        with db.get_connection() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        db_unlocked = True
+    except Exception as e:
+        print(f"[Warning] WAL checkpoint issue: {e}")
+        db_unlocked = False
+
     final_stats = db.get_archive_stats()
 
     print("\n" + "=" * 70)
@@ -108,15 +125,17 @@ def main():
     print(f" Total files examined:       {total_files}")
     print(f" Newly processed & indexed:  {processed_count}")
     print(f" Previously indexed (skip):  {skipped_count}")
+    print(f" Quarantined stubs (<4KB):   {quarantined_count}")
     print(f" Failed files:               {failed_count}")
     print(f" Total run duration:         {total_elapsed/60.0:.2f} minutes")
     print(f" Transcripts added this run: {total_transcripts_added}")
     print(f" Memories added this run:    {total_memories_added}")
+    print(f" Database Checkpoint/Unlock: {'CONFIRMED (TRUNCATED WAL)' if db_unlocked else 'PENDING'}")
     print("-" * 70)
     print(f" Final Archive DB Stats:")
     print(f"  - Indexed Media Sources:   {final_stats['media_files']}")
     print(f"  - Granular Transcripts:    {final_stats['transcripts']}")
-    print(f"  - Total Memories in Store: {final_stats['total_memories']} ({final_stats['verified_memories']} verified)")
+    print(f"  - Total Memories in Store: {final_stats['total_memories']} ({final_stats['verified_memories']} verified, {final_stats['synthetic_fixtures']} synthetic)")
     print(f"  - Temporal Beliefs:        {final_stats['temporal_beliefs']}")
     print("=" * 70)
 
@@ -124,10 +143,10 @@ def main():
     print("\nSample Newly Ingested Memories from Authentic Vlogs:")
     sample_mems = db.list_memories(limit=5)
     for m in sample_mems:
-        if m.verification_status.value == "personal_verified":
-            print(f"\n • Date: {m.date_occurred} (Span: {m.start_seconds:.1f}s - {m.end_seconds:.1f}s)")
-            print(f"   Summary: {m.summary}")
-            print(f"   Excerpt: \"{m.content[:140]}...\"")
+        print(f"\n • [{m.verification_status.value.upper()}] Date: {m.date_occurred} (Span: {m.start_seconds:.1f}s - {m.end_seconds:.1f}s)")
+        print(f"   Summary: {m.summary}")
+        print(f"   Tags: {m.tags}")
+        print(f"   Excerpt: \"{m.content[:140]}...\"")
     print("\nAll memories and demuxed audio clips are safely preserved on local disk.")
 
 

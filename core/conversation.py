@@ -246,7 +246,8 @@ class ConversationEngine:
                     evidence_texts=evidence_texts,
                     beliefs_summary=beliefs_summary,
                     has_sufficient_evidence=has_evidence,
-                    draft_response=model_output
+                    draft_response=model_output,
+                    era_id=active_era.era_id if active_era else None
                 )
                 model_output = sanitize_persona_text(model_output)
             except Exception:
