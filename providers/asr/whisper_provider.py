@@ -142,6 +142,32 @@ class PyAVWhisperASRProvider(ASRProvider):
                     ))
                 if segments:
                     return segments
+
+                # If VAD filtered out quiet speech or short microphone utterance, retry without VAD
+                segments_iter, info = faster_model.transcribe(
+                    media_path,
+                    beam_size=5,
+                    vad_filter=False,
+                    initial_prompt=DOMAIN_INITIAL_PROMPT
+                )
+                for seg in segments_iter:
+                    text = seg.text.strip()
+                    if not text:
+                        continue
+                    text = normalize_domain_lexicon(text)
+                    conf = round(math.exp(max(seg.avg_logprob, -3.0)), 2)
+                    segments.append(TranscriptSegment(
+                        id=str(uuid.uuid4()),
+                        source_id=source_id,
+                        start_seconds=round(float(seg.start), 2),
+                        end_seconds=round(float(seg.end), 2),
+                        speaker="Speaker 1",
+                        text=text,
+                        confidence=min(max(conf, 0.0), 1.0),
+                        language=info.language or "en"
+                    ))
+                if segments:
+                    return segments
             except Exception as e:
                 print(f"[ASR] faster-whisper transcription error: {e}")
 
@@ -175,7 +201,11 @@ class PyAVWhisperASRProvider(ASRProvider):
         except Exception:
             pass
 
-        # 3. Fallback to mock provider for test fixtures
+        # 3. For live user microphone input, never hallucinate mock text
+        if source_id == "user_mic":
+            return []
+
+        # 4. Fallback to mock provider for test fixtures only
         if self._mock:
             return self._mock.transcribe(media_path, source_id)
 

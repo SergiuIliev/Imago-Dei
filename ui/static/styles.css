@@ -560,6 +560,58 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
+.msg-body {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-high);
+}
+
+.m3-bubble.user .msg-body {
+  white-space: pre-wrap;
+}
+
+.chat-paragraph {
+  margin: 0 0 12px 0;
+  line-height: 1.65;
+  color: inherit;
+}
+
+.chat-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.chat-list {
+  margin: 8px 0 12px 20px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.chat-list li {
+  margin-bottom: 6px;
+  line-height: 1.55;
+  color: inherit;
+}
+
+.chat-inline-code {
+  font-family: var(--font-mono, monospace);
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+  color: var(--color-accent);
+}
+
+.chat-disclaimer-banner {
+  background: rgba(142, 110, 240, 0.08);
+  border-left: 3px solid var(--color-accent);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  color: var(--text-medium);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
 .bubble-top-meta {
   display: flex;
   align-items: center;

@@ -364,14 +364,44 @@ async def serve_audio(filename: str):
 async def transcribe_audio(audio: UploadFile = File(...)):
     """Transcribes user speech from push-to-talk microphone audio (webm/wav/mp4) via local Whisper."""
     import tempfile
+    import subprocess
     suffix = Path(audio.filename or "recording.webm").suffix or ".webm"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp_path = tmp.name
         content = await audio.read()
         tmp.write(content)
 
+    if not content or len(content) < 500:
+        if os.path.exists(tmp_path):
+            try: os.unlink(tmp_path)
+            except Exception: pass
+        return {
+            "status": "ok",
+            "transcription": "",
+            "segments": [],
+            "duration_seconds": 0.0,
+            "language": "en"
+        }
+
+    wav_path = None
+    transcribe_target = tmp_path
+    ffmpeg_bin = "/Users/Sergiu/AI/venv-voice/bin/ffmpeg"
+    if os.path.exists(ffmpeg_bin):
+        try:
+            wav_path = tmp_path + ".converted.wav"
+            cmd = [
+                ffmpeg_bin, "-y", "-i", tmp_path,
+                "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+                wav_path
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            if res.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 500:
+                transcribe_target = wav_path
+        except Exception:
+            transcribe_target = tmp_path
+
     try:
-        segments = asr_provider.transcribe(tmp_path, source_id="user_mic")
+        segments = asr_provider.transcribe(transcribe_target, source_id="user_mic")
         full_text = " ".join(seg.text for seg in segments).strip()
         total_duration = segments[-1].end_seconds if segments else 0.0
         return {
@@ -384,11 +414,12 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ASR transcription error: {str(e)}")
     finally:
-        if os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+        for p in [tmp_path, wav_path]:
+            if p and os.path.exists(p):
+                try:
+                    os.unlink(p)
+                except Exception:
+                    pass
 
 
 @app.get("/api/memories")

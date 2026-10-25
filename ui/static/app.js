@@ -299,14 +299,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (result.transcription && result.transcription.trim()) {
         chatInput.value = result.transcription.trim();
+        if (micStatusText) micStatusText.innerText = `Transcribed: "${result.transcription.trim()}"`;
+        setTimeout(() => {
+          if (micStatusIndicator) micStatusIndicator.style.display = "none";
+        }, 2000);
         sendMessage();
       } else {
-        alert("No intelligible speech detected in recording.");
+        if (micStatusIndicator) {
+          micStatusIndicator.style.display = "flex";
+          if (micStatusText) micStatusText.innerText = "No intelligible speech detected. Please speak closer to the mic.";
+          setTimeout(() => {
+            if (micStatusIndicator) micStatusIndicator.style.display = "none";
+          }, 4000);
+        }
       }
     } catch (err) {
-      alert(`Transcription error: ${err.message}`);
-    } finally {
-      if (micStatusIndicator) micStatusIndicator.style.display = "none";
+      console.warn("Transcription note:", err);
+      if (micStatusIndicator) {
+        micStatusIndicator.style.display = "flex";
+        if (micStatusText) micStatusText.innerText = `Microphone ASR: ${err.message}`;
+        setTimeout(() => {
+          if (micStatusIndicator) micStatusIndicator.style.display = "none";
+        }, 4000);
+      }
     }
   }
 
@@ -376,6 +391,69 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   });
 
+  function formatInlineMarkdown(safeText) {
+    // Bold: **text**
+    let s = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text* (excluding already formatted strong)
+    s = s.replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, '$1<em>$2</em>$3');
+    // Inline code: `code`
+    s = s.replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>');
+    // Line breaks within a paragraph
+    s = s.replace(/\n/g, '<br/>');
+    return s;
+  }
+
+  function formatMessageText(text) {
+    if (!text) return "";
+
+    // 1. Separate into raw paragraphs by double newline
+    let rawParagraphs = text.trim().split(/\n\s*\n/);
+
+    // If text has no double newlines but is long (> 240 chars) with multiple sentences,
+    // intelligently split into natural conversational paragraphs
+    if (rawParagraphs.length === 1 && rawParagraphs[0].length > 240) {
+      const sents = rawParagraphs[0].match(/[^.!?]+[.!?]+(?:\s+|$)/g);
+      if (sents && sents.length >= 3) {
+        const splitParas = [];
+        let cur = "";
+        for (let i = 0; i < sents.length; i++) {
+          cur += sents[i];
+          // Break into paragraphs after 2-3 sentences (~160+ chars)
+          if (cur.length >= 160 && i < sents.length - 1) {
+            splitParas.push(cur.trim());
+            cur = "";
+          }
+        }
+        if (cur.trim()) splitParas.push(cur.trim());
+        if (splitParas.length > 1) {
+          rawParagraphs = splitParas;
+        }
+      }
+    }
+
+    // 2. Render each paragraph
+    return rawParagraphs.map(para => {
+      let p = para.trim();
+      if (!p) return "";
+
+      // Check for bullet lists
+      if (p.startsWith("- ") || p.startsWith("* ") || p.includes("\n- ") || p.includes("\n* ")) {
+        const items = p.split(/\n(?=[-*]\s+)/).map(it => {
+          const cleanItem = it.replace(/^[-*]\s+/, "");
+          return `<li>${formatInlineMarkdown(escapeHtml(cleanItem))}</li>`;
+        });
+        return `<ul class="chat-list">${items.join("")}</ul>`;
+      }
+
+      // Check for standardized parametric disclaimer banner
+      if (p.includes("Memory not found") && p.includes("closest memories are below")) {
+        return `<div class="chat-disclaimer-banner">${formatInlineMarkdown(escapeHtml(p))}</div>`;
+      }
+
+      return `<p class="chat-paragraph">${formatInlineMarkdown(escapeHtml(p))}</p>`;
+    }).join("");
+  }
+
   function appendMessage(role, author, text) {
     const msg = document.createElement("div");
     msg.className = `m3-bubble ${role} message`;
@@ -386,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span>${author}</span>
         </span>
       </div>
-      <div class="msg-body">${escapeHtml(text)}</div>
+      <div class="msg-body">${formatMessageText(text)}</div>
     `;
     chatMessages.appendChild(msg);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -490,7 +568,9 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="m3-era-chip">${escapeHtml(eraText)}</span>
       </div>
       <div class="msg-body">
-        ${escapeHtml(data.text)}
+        <div class="response-text-flow">
+          ${formatMessageText(data.text)}
+        </div>
         ${evidenceHtml}
         ${voiceControlsHtml}
       </div>

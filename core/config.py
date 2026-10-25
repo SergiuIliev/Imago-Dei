@@ -27,8 +27,8 @@ class StorageConfig:
 class LLMConfig:
     provider: str = "ollama" # ollama, mlx, mock
     endpoint: str = "http://127.0.0.1:11434"
-    model_name: str = "sergiu-time-capsule" # Fine-tuned autobiographical Ollama model
-    fallback_model: str = "llama3.2:3b"
+    model_name: str = "sergiu-time-capsule:latest" # Fine-tuned autobiographical Ollama model
+    fallback_model: str = "sergiu-time-capsule:latest"
     critic_model: str = "qwen3:4b-heretic"
     mlx_endpoint: str = "http://127.0.0.1:8081"
     enable_jev_verification: bool = True
