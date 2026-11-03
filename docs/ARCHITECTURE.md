@@ -2,7 +2,7 @@
 
 **Project:** Project 30 (Autonomous Development of My Personal AI Time Capsule)  
 **Host Environment:** Apple Silicon M4 Mac (macOS 27.0, 24 GB Unified Memory)  
-**Target Directory:** `/Users/Sergiu/AI`  
+**Target Directory:** `~/AI`  
 **Security Invariant:** 100% Local Inference · Loopback Only (`127.0.0.1`) · Zero Cloud Telemetry
 
 ---

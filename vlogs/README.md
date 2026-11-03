@@ -1,6 +1,6 @@
 # Personal Vlog & Media Recordings Directory
 
-This is the dedicated folder for your personal recordings in the **Personal AI Time Capsule** (`/Users/Sergiu/AI/Time_Capsule/vlogs`).
+This is the dedicated folder for your personal recordings in the **Personal AI Time Capsule** (`./vlogs`).
 
 ## How to use:
 1. Copy or move your personal video or audio recordings into this folder:

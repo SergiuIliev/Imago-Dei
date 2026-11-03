@@ -22,14 +22,16 @@ import time
 from pathlib import Path
 import yaml
 
-VENV_MLX_BIN = Path("/Users/Sergiu/AI/venv-mlx/bin")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+VENV_MLX_BIN = Path(os.environ.get("VENV_MLX_BIN", str(PROJECT_ROOT.parent / "venv-mlx" / "bin")))
 PYTHON_BIN = VENV_MLX_BIN / "python3"
-BASE_MODEL_DIR = Path("/Users/Sergiu/AI/models/mlx/Llama-3.2-3B-Instruct-heretic-6bit")
-TRAINING_DIR = Path("/Users/Sergiu/AI/Time_Capsule/data/capsule/training")
+MODELS_ROOT = Path(os.environ.get("TIMECAPSULE_MODELS_DIR", str(PROJECT_ROOT / "models")))
+BASE_MODEL_DIR = MODELS_ROOT / "mlx" / "Llama-3.2-3B-Instruct-heretic-6bit"
+TRAINING_DIR = PROJECT_ROOT / "data" / "capsule" / "training"
 ADAPTERS_DIR = TRAINING_DIR / "adapters"
-FUSED_MODEL_DIR = Path("/Users/Sergiu/AI/models/mlx/sergiu-capsule-mlx-6bit")
+FUSED_MODEL_DIR = MODELS_ROOT / "mlx" / "sergiu-capsule-mlx-6bit"
 MODELFILE_PATH = TRAINING_DIR / "Modelfile.sergiu-capsule"
-GGUF_BASE_MODEL = Path("/Users/Sergiu/AI/models/gguf/Llama-3.2-3B-Instruct-abliterated.Q4_K_M.gguf")
+GGUF_BASE_MODEL = MODELS_ROOT / "gguf" / "Llama-3.2-3B-Instruct-abliterated.Q4_K_M.gguf"
 
 
 def step_1_prepare_lora_config() -> Path:

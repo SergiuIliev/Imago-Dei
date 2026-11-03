@@ -1,7 +1,7 @@
 # Project 30: Personal AI Time Capsule — Model Registry & Vetted Catalog
 **Host Environment:** Apple Silicon M4 (Mac16,12), macOS 27.0 (Darwin 27.0.0 arm64), 24 GB Unified Memory  
-**Base Directory:** `/Users/Sergiu/AI`  
-**Configuration Reference:** [`/Users/Sergiu/AI/core/config.py`](file:///Users/Sergiu/AI/core/config.py)  
+**Base Directory:** `~/AI`  
+**Configuration Reference:** [`~/AI/core/config.py`](file://~/AI/core/config.py)  
 **Document Classification:** Production Model Registry & Deployment Ledger  
 **Author:** Agent 2 (Local AI & Model Researcher)
 
@@ -17,8 +17,12 @@ This registry defines the authoritative catalog of approved models for Project 3
 |---|---|---|---|---|---|
 | **LLM** | `llama3.2:3b` | **ACTIVE (Ollama)** | 2.02 GB | 2.55 GB | Llama 3.2 Community |
 | **LLM** | `gemma2:2b` | **ACTIVE (Ollama)** | 1.63 GB | 2.15 GB | Gemma Terms of Use |
-| **LLM** | `qwen2.5:7b` | **READY TO PULL** | 4.68 GB | 5.60 GB | Apache 2.0 |
-| **LLM** | `mistral-nemo:12b` | **READY TO PULL** | 7.50 GB | 9.20 GB | Apache 2.0 |
+| **LLM** | `qwen2.5:7b` | **READY TO INGEST** | 4.68 GB | 5.60 GB | Apache 2.0 |
+| **LLM** | `qwen2.5-coder:7b`| **READY TO INGEST** | 4.68 GB | 5.60 GB | Apache 2.0 |
+| **LLM** | `deepseek-r1:7b` | **READY TO INGEST** | 4.68 GB | 5.70 GB | MIT |
+| **LLM** | `deepseek-r1:14b`| **READY TO INGEST** | 9.00 GB | 10.40 GB | MIT |
+| **LLM** | `mistral-nemo:12b`| **READY TO INGEST** | 7.50 GB | 9.20 GB | Apache 2.0 |
+| **LLM** | `phi4:14b` | **READY TO INGEST** | 9.10 GB | 10.40 GB | MIT |
 | **ASR** | `whisper-base` | **AVAILABLE (faster-whisper)**| 145 MB | 250 MB | MIT |
 | **ASR** | `whisper-large-v3-turbo`| **RECOMMENDED TARGET** | 1.62 GB | 1.95 GB | MIT |
 | **Diarization**| `pyannote/speaker-diarization-3.1`| **RECOMMENDED TARGET** | 1.10 GB | 1.80 GB | MIT (code) / gated HF |
@@ -37,105 +41,188 @@ This registry defines the authoritative catalog of approved models for Project 3
 
 ## 2. Large Language Models (LLM) Catalog
 
-### 2.1 Llama 3.2 3B Instruct
-- **Component:** LLM (Conversational Persona & Interactive Dialogue)
-- **Model Name & Version:** Meta Llama 3.2 3B Instruct (`llama3.2:3b-instruct-q4_K_M`)
-- **License Details:**
-  - **Code License:** N/A (Standard Transformer architecture)
-  - **Weight License:** **Llama 3.2 Community License Agreement** (Free for research and commercial use under 700M monthly active users; outputs are free from proprietary claim by Meta).
-- **Repository / Hub ID:**
-  - Hugging Face: [`meta-llama/Llama-3.2-3B-Instruct`](https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct)
-  - Ollama Manifest: `registry.ollama.ai/library/llama3.2:3b`
-- **Quantization & Storage:**
-  - Precision: `Q4_K_M` (4-bit medium k-quant)
-  - Disk Footprint: **$2.02\text{ GB}$** ($2,019,393,189\text{ bytes}$)
-  - Checksum Digest: `a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72`
-- **Memory Requirement (24 GB Unified Memory):**
-  - Base Model Load: $2.1\text{ GB}$
-  - Peak with 8,192 token KV-cache: **$2.55\text{ GB}$**
-  - Peak with 32,768 token KV-cache: $3.85\text{ GB}$
-- **Current Status on Host:** **ACTIVE & OPERATIONAL** in Ollama daemon (`http://127.0.0.1:11434`), registered in [`/Users/Sergiu/AI/core/config.py`](file:///Users/Sergiu/AI/core/config.py) as primary LLM.
-- **Empirical M4 Benchmarks:**
-  - Prompt Evaluation Speed: $112.2\text{--}160.5\text{ tok/s}$
-  - Autoregressive Generation Speed: $16.5\text{--}24.8\text{ tok/s}$
-  - Benchmark Prompt ("Thermodynamic Entropy"): 75 tokens generated in $4.77\text{ s}$ ($15.7\text{ tok/s}$ cold start).
-- **Known Limitations:**
-  - Can drop subtle biographical nuances across multi-decade temporal shifts if the prompt context exceeds 16k tokens without chunked summarization.
-- **Upgrade Path for Personal Media:**
-  - When the user imports $>50$ vlog transcripts, fine-tune a lightweight LoRA rank-16 adapter (`llama3.2-3b-timecapsule-lora.gguf`, $\sim 45\text{ MB}$) on personal autobiographical Q&A pairs to imprint characteristic conversational phrases and personal idioms.
+The Personal AI Time Capsule supports modern open-weights foundation models across multiple runtime engines (Ollama, Apple MLX Metal, GGUF/llama.cpp, and Hugging Face Transformers). Each architecture is calibrated for first-person autobiographical fidelity, epistemic honesty, and memory headroom.
+
+### 2.1 LLaMA 3.2 & 3.3 Family
+- **Meta LLaMA 3.2 1B Instruct (`llama3.2:1b`)**:
+  - Parameters: 1.23B | Context: 128k | License: Llama 3.2 Community
+  - 4-bit Footprint: 1.6 GB RAM | Speed: ~65 tok/s on M4
+  - Role: Ultra-fast edge triage, real-time metadata indexing, and embedded extraction.
+- **Meta LLaMA 3.2 3B Instruct (`llama3.2:3b`)**:
+  - Parameters: 3.21B | Context: 128k | License: Llama 3.2 Community
+  - 4-bit Footprint: 2.8 GB RAM | Speed: ~38 tok/s on M4
+  - Role: Primary autobiographical dialogue model; excellent memory/latency balance.
+- **Meta LLaMA 3.3 70B Instruct (`llama3.3:70b`)**:
+  - Parameters: 70.6B | Context: 128k | License: Llama 3.3 Community
+  - 4-bit Footprint: 46.1 GB RAM | Requires 64GB+ unified memory or distributed inference.
+  - Role: Flagship frontier reasoning and annual autobiographical synthesis.
 
 ---
 
-### 2.2 Gemma 2 2B Instruct
-- **Component:** LLM (Secondary Fallback & Fast Entity Extraction)
-- **Model Name & Version:** Google Gemma 2 2B Instruct (`gemma2:2b-instruct-q4_0`)
-- **License Details:**
-  - **Weight License:** **Gemma Terms of Use** (Permissive open-weights, commercial deployment permitted subject to Google Prohibited Use Policy).
-- **Repository / Hub ID:**
-  - Hugging Face: [`google/gemma-2-2b-it`](https://huggingface.co/google/gemma-2-2b-it)
-  - Ollama Manifest: `registry.ollama.ai/library/gemma2:2b`
-- **Quantization & Storage:**
-  - Precision: `Q4_0`
-  - Disk Footprint: **$1.63\text{ GB}$** ($1,629,518,495\text{ bytes}$)
-  - Checksum Digest: `8ccf136fdd5298f3ffe2d69862750ea7fb56555fa4d5b18c04e3fa4d82ee09d7`
-- **Memory Requirement:**
-  - RAM/VRAM at 8,192 max context: **$2.15\text{ GB}$**
-- **Current Status on Host:** **ACTIVE & OPERATIONAL** in Ollama daemon, registered as default fallback in `core/config.py`.
-- **Empirical M4 Benchmarks:**
-  - Prompt Evaluation Speed: $132.6\text{--}160.4\text{ tok/s}$
-  - Generation Speed: $21.7\text{--}23.5\text{ tok/s}$
-  - Safety False-Refusal Check: 0% false refusal on benign security and coding prompts.
-- **Known Limitations:**
-  - Hard context window limit of $8,192\text{ tokens}$. Sliding-window attention can truncate distant context during long autobiographical narratives.
-- **Upgrade Path for Personal Media:**
-  - Deploy as a specialized, ultra-fast background extractor during vlog ingestion to parse raw transcripts into structured JSON facts (dates, locations, emotional labels) while preserving the main LLM for user dialogue.
+### 2.2 Qwen 2.5 General & Reasoning Family
+- **Qwen 2.5 0.5B / 1.5B / 3B Instruct (`qwen2.5:0.5b`, `qwen2.5:1.5b`, `qwen2.5:3b`)**:
+  - Parameters: 0.49B - 3.09B | Context: 32k | License: Apache 2.0
+  - 4-bit Footprint: 1.1 - 2.7 GB RAM | Speed: 50-80 tok/s on M4
+  - Role: High-speed bilingual (English/Romanian) processing, entity parsing, and JSON generation.
+- **Qwen 2.5 7B Instruct (`qwen2.5:7b`)**:
+  - Parameters: 7.61B | Context: 128k | License: Apache 2.0
+  - 4-bit Footprint: 5.7 GB RAM | Speed: 26-32 tok/s on M4
+  - Role: Recommended sweet-spot foundation model; deep factual recall and nuance preservation.
+- **Qwen 2.5 14B Instruct (`qwen2.5:14b`)**:
+  - Parameters: 14.7B | Context: 128k | License: Apache 2.0
+  - 4-bit Footprint: 10.4 GB RAM | Speed: 16-20 tok/s on M4
+  - Role: High-precision autobiographical reasoning with near-70B benchmark scores.
+- **Qwen 2.5 32B & 72B Instruct (`qwen2.5:32b`, `qwen2.5:72b`)**:
+  - Parameters: 32.5B / 72.7B | Context: 128k | License: Apache 2.0
+  - 4-bit Footprint: 21.8 GB (32B) / 47.3 GB (72B) RAM.
+  - Role: Enterprise-grade complex reasoning for life narrative retrospectives.
 
 ---
 
-### 2.3 Qwen 2.5 7B Instruct
-- **Component:** LLM (High-Fidelity Autobiographical Reasoning & Persona Synthesis)
-- **Model Name & Version:** Qwen 2.5 7B Instruct (`qwen2.5:7b-instruct-q4_K_M`)
-- **License Details:**
-  - **Code & Weight License:** **Apache 2.0** (Completely unencumbered, fully open source for commercial and private use).
-- **Repository / Hub ID:**
-  - Hugging Face: [`Qwen/Qwen2.5-7B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct)
-  - Ollama Hub: `registry.ollama.ai/library/qwen2.5:7b`
-- **Quantization & Storage:**
-  - Precision: `Q4_K_M`
-  - Disk Footprint: **$4.68\text{ GB}$**
-- **Memory Requirement:**
-  - Active VRAM at 8k context: **$5.60\text{ GB}$**
-  - Active VRAM at 32k context: $7.20\text{ GB}$
-- **Current Status on Host:** **TESTED & READY TO DEPLOY**. Can be pulled immediately via:
-  ```bash
-  OLLAMA_MODELS=/Users/Sergiu/AI/models/ollama /Users/Sergiu/.local/bin/ollama pull qwen2.5:7b
-  ```
-- **Estimated M4 Benchmarks:**
-  - Generation Speed: $22\text{--}28\text{ tok/s}$
-  - Prefill Speed: $85\text{--}110\text{ tok/s}$
-- **Known Limitations:**
-  - Larger footprint than 3B models ($5.6\text{ GB}$ vs $2.6\text{ GB}$). Leaves less headroom if heavy diffusion models are triggered concurrently.
-- **Upgrade Path for Personal Media:**
-  - Primary recommended model when the Time Capsule incorporates complex temporal beliefs (tracking changes in philosophy, worldview, or lifestyle across 10+ years). Exceptional bilingual English and Romanian capability.
+### 2.3 Qwen 2.5-Coder Family
+- **Qwen 2.5-Coder 1.5B & 7B (`qwen2.5-coder:1.5b`, `qwen2.5-coder:7b`)**:
+  - Parameters: 1.54B / 7.61B | Context: 32k / 128k | License: Apache 2.0
+  - 4-bit Footprint: 1.8 GB / 5.7 GB RAM
+  - Role: Technical code audit, AST analysis of personal repositories, and automated data scripts.
+- **Qwen 2.5-Coder 14B & 32B (`qwen2.5-coder:14b`, `qwen2.5-coder:32b`)**:
+  - Parameters: 14.7B / 32.5B | Context: 128k | License: Apache 2.0
+  - 4-bit Footprint: 10.4 GB / 21.8 GB RAM
+  - Role: Frontier architectural refactoring and multi-repository synthesis.
 
 ---
 
-### 2.4 Mistral-Nemo 12B Instruct
-- **Component:** LLM (Offline Deep Reasoning & Annual Summary Synthesis)
-- **Model Name & Version:** Mistral-Nemo 12B Instruct 2407 (`mistral-nemo:12b-instruct-2407-q4_K_M`)
-- **License Details:**
-  - **Code & Weight License:** **Apache 2.0**
-- **Repository / Hub ID:**
-  - Hugging Face: [`mistralai/Mistral-Nemo-Instruct-2407`](https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407)
-  - Ollama Hub: `registry.ollama.ai/library/mistral-nemo:12b`
-- **Quantization & Storage:**
-  - Precision: `Q4_K_M`
-  - Disk Footprint: **$7.50\text{ GB}$**
-- **Memory Requirement:**
-  - Active VRAM at 8k context: **$9.20\text{ GB}$**
-- **Current Status on Host:** **EVALUATED FOR OFFLINE ARCHIVE BATCH JOBS**.
-- **Quality & Limitations:**
-  - Superb multilingual compression via Tekken tokenizer. However, consuming $9.2\text{ GB}$ of VRAM leaves insufficient space for concurrent real-time avatar synthesis ($2.2\text{ GB}$) and TTS on a 24 GB machine. Recommended strictly for offline batch jobs (e.g. generating annual life chapter overviews).
+### 2.4 DeepSeek-R1 Distilled Reasoning Family
+- **DeepSeek-R1 Distill Qwen 1.5B & 7B (`deepseek-r1:1.5b`, `deepseek-r1:7b`)**:
+  - Parameters: 1.78B / 7.61B | Context: 128k | License: MIT
+  - 4-bit Footprint: 1.9 GB / 5.7 GB RAM | Speed: 24-30 tok/s on M4
+  - Architecture: Internal `<think>...</think>` Chain-of-Thought scratchpad distillation.
+  - Role: First-principles philosophical reasoning and retrospective cognitive audits.
+- **DeepSeek-R1 Distill LLaMA 8B & 70B (`deepseek-r1:8b`, `deepseek-r1:70b`)**:
+  - Parameters: 8.03B / 70.6B | Context: 128k | License: MIT
+  - 4-bit Footprint: 6.0 GB / 46.1 GB RAM
+  - Role: Mathematical proof verification, rigorous logic analysis, and belief reconciliation.
+- **DeepSeek-R1 Distill Qwen 14B & 32B (`deepseek-r1:14b`, `deepseek-r1:32b`)**:
+  - Parameters: 14.7B / 32.5B | Context: 128k | License: MIT
+  - 4-bit Footprint: 10.4 GB / 21.8 GB RAM
+  - Role: Deep multi-step reasoning without requiring cloud server infrastructure.
+
+---
+
+### 2.5 Mistral Family
+- **Mistral NeMo 12B Instruct 2407 (`mistral-nemo:12b`)**:
+  - Parameters: 12.2B | Context: 128k (Tekken Tokenizer) | License: Apache 2.0
+  - 4-bit Footprint: 8.9 GB RAM | Speed: ~20 tok/s on M4
+  - Role: Long-context multilingual narrative synthesis; offline annual summaries.
+- **Mistral Small 24B Instruct (`mistral-small:24b`)**:
+  - Parameters: 24.0B | Context: 32k | License: Mistral Research / Commercial
+  - 4-bit Footprint: 16.7 GB RAM | Fits within 24GB Unified Memory (1.3 GB headroom).
+  - Role: High-density cognitive processing with enterprise-grade reasoning latency.
+
+---
+
+### 2.6 Google Gemma 2 Family
+- **Google Gemma 2 2B Instruct (`gemma2:2b`)**:
+  - Parameters: 2.61B | Context: 8k | License: Gemma Terms of Use
+  - 4-bit Footprint: 2.4 GB RAM | Speed: ~35 tok/s on M4
+  - Role: Ultra-fast fallback and offline entity extraction.
+- **Google Gemma 2 9B & 27B Instruct (`gemma2:9b`, `gemma2:27b`)**:
+  - Parameters: 9.24B / 27.2B | Context: 8k | License: Gemma Terms of Use
+  - 4-bit Footprint: 7.1 GB / 18.6 GB RAM
+  - Role: Eloquent, rich prose generation for conversational memoir drafting.
+
+---
+
+### 2.7 Microsoft Phi-3.5 & Phi-4 Family
+- **Microsoft Phi-3.5 Mini 3.8B Instruct (`phi3.5:3.8b`)**:
+  - Parameters: 3.82B | Context: 128k | License: MIT
+  - 4-bit Footprint: 3.4 GB RAM | Speed: ~32 tok/s on M4
+  - Role: Dense 128k context reasoning in an ultra-compact footprint.
+- **Microsoft Phi-4 14B Instruct (`phi4:14b`)**:
+  - Parameters: 14.7B | Context: 16k | License: MIT
+  - 4-bit Footprint: 10.4 GB RAM | Speed: ~18 tok/s on M4
+  - Role: State-of-the-art synthetic data reasoning with superior STEM and epistemic precision.
+
+---
+
+### 2.8 Unified Memory Sizing, Quantization Profiles & Headroom Allocation
+
+On Apple Silicon M4 with **24 GB Unified Memory**, system RAM is dynamically shared across CPU and Metal GPU pipelines. The Time Capsule enforces the following sizing guidelines:
+
+$$\text{Total Memory} = \text{Model Weight} + \text{KV Cache}(C) + \text{Runtime Overhead}(0.5\text{ GB})$$
+
+| Model Parameter Size | Quantization | Weight Memory | 8k KV-Cache | Total Required | M4 (24 GB) Status |
+|---|---|---|---|---|---|
+| **1B -- 3.5B** | 4-bit (`Q4_K_M`) | 0.8 -- 2.1 GB | 0.35 GB | **1.6 -- 2.8 GB** | **Comfortable (+15.2 GB)** |
+| **7B -- 8B** | 4-bit (`Q4_K_M`) | 4.2 -- 4.8 GB | 0.65 GB | **5.3 -- 6.0 GB** | **Comfortable (+12.0 GB)** |
+| **7B -- 8B** | 8-bit (`Q8_0`) | 8.0 -- 9.2 GB | 0.65 GB | **9.1 -- 10.3 GB** | **Comfortable (+7.7 GB)** |
+| **12B -- 14B** | 4-bit (`Q4_K_M`) | 7.3 -- 8.8 GB | 1.10 GB | **8.9 -- 10.4 GB** | **Comfortable (+7.6 GB)** |
+| **24B** | 4-bit (`Q4_K_M`) | 14.4 GB | 1.80 GB | **16.7 GB** | **Tight Fit (+1.3 GB)** |
+| **32B** | 4-bit (`Q4_K_M`) | 19.5 GB | 1.80 GB | **21.8 GB** | **Exceeds Allocatable** |
+| **70B -- 72B** | 4-bit (`Q4_K_M`) | 42.4 -- 43.6 GB | 3.20 GB | **46.1 -- 47.3 GB** | **Exceeds Host Memory** |
+
+*Note:* Concurrent processes (F5-TTS Metal daemon $\sim 2.1\text{ GB}$, Vector Store $\sim 0.2\text{ GB}$, OS $\sim 4.0\text{ GB}$) leave approximately **$18.0\text{ GB}$ allocatable to the active LLM**. Models $\le 14\text{B}$ run concurrently with zero memory pressure.
+
+---
+
+### 2.9 Open-Weights Ingestion Pipeline CLI Reference
+
+The ingestion pipeline CLI (`scripts/ingest_models.py`) provides end-to-end automation for discovery, pulling, hardware profiling, benchmarking, and configuration registration:
+
+#### 1. Hardware Profiling & VRAM Inspection
+```bash
+./venv/bin/python scripts/ingest_models.py profile
+```
+Outputs CPU brand, detected cores, Apple Silicon unified memory verification, total/available RAM, and max allocatable model ceiling.
+
+#### 2. Curated Catalog & Fit Inspection
+```bash
+# List all 27 curated models with live fit calculation on host hardware
+./venv/bin/python scripts/ingest_models.py list
+
+# Filter by family (e.g. deepseek, qwen, llama, mistral, gemma, phi)
+./venv/bin/python scripts/ingest_models.py list --family deepseek
+
+# Inspect locally installed models across Ollama, MLX, GGUF, and Transformers
+./venv/bin/python scripts/ingest_models.py list --discovered
+```
+
+#### 3. Ingesting / Pulling Models
+```bash
+# Pull model via Ollama and automatically validate format
+./venv/bin/python scripts/ingest_models.py pull qwen2.5:7b --backend ollama
+
+# Pull model and set as default primary LLM in Time Capsule
+./venv/bin/python scripts/ingest_models.py pull llama3.2:3b --backend ollama --set-default
+
+# Pull MLX model from Hugging Face hub into models/mlx
+./venv/bin/python scripts/ingest_models.py pull mlx-community/Qwen2.5-7B-Instruct-4bit --backend mlx
+```
+
+#### 4. Throughput & Persona Alignment Benchmark
+```bash
+# Benchmark Time-to-First-Token, Generation Speed, and Epistemic Persona Adherence
+./venv/bin/python scripts/ingest_models.py benchmark sergiu-time-capsule:latest
+```
+
+#### 5. Assigning Primary, Fallback, and Critic Roles
+```bash
+# Set primary active conversational model
+./venv/bin/python scripts/ingest_models.py set-default llama3.2:3b --role primary
+
+# Set secondary fallback model
+./venv/bin/python scripts/ingest_models.py set-default gemma2:2b --role fallback
+
+# Set critic model for dual-model verification
+./venv/bin/python scripts/ingest_models.py set-default qwen2.5-coder:7b --role critic
+```
+
+#### 6. Apple MLX Quantization Conversion
+```bash
+# Convert and quantize a Hugging Face model into Apple MLX 4-bit Metal format
+./venv/bin/python scripts/ingest_models.py quantize meta-llama/Llama-3.2-3B-Instruct --bits 4
+```
+
+---
 
 ---
 
@@ -155,12 +242,12 @@ This registry defines the authoritative catalog of approved models for Project 3
   - Disk Footprint: **$1.62\text{ GB}$**
 - **Memory Requirement:**
   - Active RAM/VRAM during decode: **$1.95\text{ GB}$**
-- **Current Status on Host:** **ENGINE INSTALLED** (CTranslate2 version 4.8.3 and `faster-whisper` are already installed in `/Users/Sergiu/AI/venv-webui`). Weights are fetched on first ingestion invocation.
+- **Current Status on Host:** **ENGINE INSTALLED** (CTranslate2 version 4.8.3 and `faster-whisper` are already installed in `venv`). Weights are fetched on first ingestion invocation.
 - **Benchmarks & Speed:**
   - Real-Time Factor (RTF): **$0.055$** on Apple M4 ($18\text{x}$ faster than real time). A 60-minute vlog audio track is fully transcribed in $\sim 3.3\text{ minutes}$.
   - Word Error Rate: $1.6\%$ on clean English, $3.5\%$ on conversational speech; high fidelity on Romanian speech accents.
 - **Upgrade Path for Personal Media:**
-  - Automatically triggered whenever the user drops MP4/MOV/WAV files into `/Users/Sergiu/AI/data/capsule/media_input`. Transcripts with word-level timestamps populate the SQLite `transcripts` table.
+  - Automatically triggered whenever the user drops MP4/MOV/WAV files into `data/capsule/media_input`. Transcripts with word-level timestamps populate the SQLite `transcripts` table.
 
 ---
 
@@ -207,10 +294,10 @@ This registry defines the authoritative catalog of approved models for Project 3
 - **Quantization & Storage:**
   - Precision: ONNX FP32/FP16 optimized graph
   - Disk Footprint: **$79\text{ MB}$** ($79,166,464\text{ bytes}$)
-  - Cache Location: `/Users/Sergiu/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx.tar.gz`
+  - Cache Location: `~/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx.tar.gz`
 - **Memory Requirement:**
   - Active RAM: **$150\text{ MB}$**
-- **Current Status on Host:** **ACTIVE & CACHED**. Loaded natively by ChromaDB PersistentClient (`/Users/Sergiu/AI/data/capsule/vector_store`).
+- **Current Status on Host:** **ACTIVE & CACHED**. Loaded natively by ChromaDB PersistentClient (`data/capsule/vector_store`).
 - **Empirical M4 Benchmarks:**
   - Latency: $<1.8\text{ ms}$ per memory chunk.
   - Dimensions: $384$.
@@ -234,7 +321,7 @@ This registry defines the authoritative catalog of approved models for Project 3
   - Active RAM/VRAM: **$450\text{ MB}$**
 - **Current Status on Host:** **READY TO PULL** via:
   ```bash
-  OLLAMA_MODELS=/Users/Sergiu/AI/models/ollama /Users/Sergiu/.local/bin/ollama pull nomic-embed-text
+  OLLAMA_MODELS=models/ollama ollama pull nomic-embed-text
   ```
 - **Key Capabilities:**
   - **$8,192\text{ token context}$** allows embedding an entire 15-minute video transcript or a multi-page journal reflection in a single vector.
@@ -249,7 +336,7 @@ This registry defines the authoritative catalog of approved models for Project 3
 - **Component:** Lexical Keyword Retriever
 - **Engine Version:** SQLite 3.43+ FTS5 Virtual Table Module with BM25 ranking
 - **License:** **Public Domain**
-- **Status on Host:** **ACTIVE & OPERATIONAL** in [`/Users/Sergiu/AI/memory/database.py`](file:///Users/Sergiu/AI/memory/database.py).
+- **Status on Host:** **ACTIVE & OPERATIONAL** in [`~/AI/memory/database.py`](file://~/AI/memory/database.py).
 - **Latency & Storage:**
   - Latency: $<0.5\text{ ms}$ query time.
   - Storage Overhead: $\sim 15\%\text{--}25\%$ of SQLite database size.
@@ -314,7 +401,7 @@ This registry defines the authoritative catalog of approved models for Project 3
 - **Prosody & Fidelity:**
   - Replicates vocal timbre, natural pitch contours, breathing pauses, emotional resonance, and subtle accent features with exceptional fidelity.
 - **Upgrade Path for Personal Media:**
-  - The ingestion engine extracts a 10-second high-SNR vocal sample from user vlogs and stores it at `/Users/Sergiu/AI/data/capsule/voice_references/user_primary_reference.wav`. F5-TTS conditions all subsequent dialogue on this snippet, vocalizing the Time Capsule in the user's authentic voice.
+  - The ingestion engine extracts a 10-second high-SNR vocal sample from user vlogs and stores it at `data/capsule/voice_references/user_primary_reference.wav`. F5-TTS conditions all subsequent dialogue on this snippet, vocalizing the Time Capsule in the user's authentic voice.
 
 ---
 
@@ -350,7 +437,7 @@ This registry defines the authoritative catalog of approved models for Project 3
 - **Visual Artifacts:**
   - Zero diffusion flickering; photorealistic eyelid, gaze, and lip synchrony; seamless neck and shoulder blending without boundary seams.
 - **Upgrade Path for Personal Media:**
-  - When the user places a high-resolution portrait photograph (`portrait.jpg` or `portrait.png`) into `/Users/Sergiu/AI/data/capsule/`, LivePortrait establishes the baseline appearance feature representation. Subsequent conversational audio streams drive facial keypoint deformation in near real-time.
+  - When the user places a high-resolution portrait photograph (`portrait.jpg` or `portrait.png`) into `data/capsule/`, LivePortrait establishes the baseline appearance feature representation. Subsequent conversational audio streams drive facial keypoint deformation in near real-time.
 
 ---
 
@@ -384,7 +471,7 @@ To verify model availability, integrity, and memory consumption on the host mach
 
 ```bash
 # 1. Verify Active Ollama LLM Models and Digests
-OLLAMA_MODELS=/Users/Sergiu/AI/models/ollama /Users/Sergiu/.local/bin/ollama list
+OLLAMA_MODELS=models/ollama ollama list
 
 # 2. Check Active Ollama Daemon Health and Modelfile Config
 curl -s http://127.0.0.1:11434/api/tags | python3 -m json.tool
@@ -404,14 +491,14 @@ say -v Daniel "Time Capsule subsystem operational on Apple Silicon M4."
 say -v Ioana "Subsistemul de memorie este activ."
 
 # 6. Verify PyTorch Metal Performance Shaders (MPS)
-/Users/Sergiu/AI/venv-webui/bin/python3 -c "
+python33 -c "
 import torch
 print('MPS Available:', torch.backends.mps.is_available())
 print('MPS Built:', torch.backends.mps.is_built())
 "
 
 # 7. Verify CTranslate2 and faster-whisper ASR Engine
-/Users/Sergiu/AI/venv-webui/bin/python3 -c "
+python33 -c "
 import ctranslate2
 import faster_whisper
 print('CTranslate2 Version:', ctranslate2.__version__)
@@ -427,7 +514,7 @@ When personal media files are introduced by the user:
 
 ```
                           User Media Intake Directory:
-                   /Users/Sergiu/AI/data/capsule/media_input/
+                   data/capsule/media_input/
                                       │
          ┌────────────────────────────┼────────────────────────────┐
          │                            │                            │

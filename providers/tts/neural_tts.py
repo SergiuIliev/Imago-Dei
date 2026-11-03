@@ -35,13 +35,14 @@ class NeuralTTSProvider(TTSProvider):
     def __init__(
         self,
         model_name: str = "sergiu_authentic_f5",
-        models_dir: str = "/Users/Sergiu/AI/models/tts",
+        models_dir: Optional[str] = None,
         voice_profile: Optional[VoiceProfile] = None,
         fallback_provider: Optional[TTSProvider] = None,
         delivery_controller: Optional[ExpressiveDeliveryController] = None
     ):
+        project_root = Path(__file__).resolve().parent.parent.parent
         self.model_name = model_name
-        self.models_dir = Path(models_dir)
+        self.models_dir = Path(models_dir or os.environ.get("TIMECAPSULE_TTS_MODELS_DIR", str(project_root / "models" / "tts")))
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.profile = voice_profile or VoiceProfile()
         self.fallback = fallback_provider or MacOSNativeTTSProvider()
@@ -61,8 +62,9 @@ class NeuralTTSProvider(TTSProvider):
 
     def _initialize_engine(self) -> bool:
         """Initializes Kokoro neural TTS pipeline and loads custom voice tensor if available."""
+        project_root = Path(__file__).resolve().parent.parent.parent
         if "VIRTUAL_ENV" not in os.environ:
-            os.environ["VIRTUAL_ENV"] = "/Users/Sergiu/AI/venv-webui"
+            os.environ["VIRTUAL_ENV"] = str(project_root / "venv")
 
         try:
             from kokoro import KPipeline
@@ -72,7 +74,7 @@ class NeuralTTSProvider(TTSProvider):
             self._pipeline = KPipeline(lang_code="a")
 
             # Check for custom calibrated voice tensor
-            custom_voice_path = Path("/Users/Sergiu/AI/Time_Capsule/data/capsule/voice_references/sergiu_voice.pt")
+            custom_voice_path = project_root / "data" / "capsule" / "voice_references" / "sergiu_voice.pt"
             if custom_voice_path.exists():
                 self._custom_voice_tensor = torch.load(custom_voice_path, map_location="cpu", weights_only=False)
                 self.profile.is_cloned_from_personal_media = True
@@ -270,8 +272,9 @@ class NeuralTTSProvider(TTSProvider):
                 print(f"[NeuralTTSProvider] Notice: Daemon synthesis failed ({e}), falling back to subprocess.")
 
         # 3. Subprocess Fallback with f5_synthesize.py
-        f5_script = Path("/Users/Sergiu/AI/Time_Capsule/scripts/f5_synthesize.py")
-        f5_python = Path("/Users/Sergiu/AI/venv-voice/bin/python")
+        project_root = Path(__file__).resolve().parent.parent.parent
+        f5_script = project_root / "scripts" / "f5_synthesize.py"
+        f5_python = Path(os.environ.get("VENV_VOICE_PYTHON", sys.executable))
 
         if f5_script.exists() and f5_python.exists() and use_f5:
             try:

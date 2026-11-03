@@ -181,6 +181,7 @@ def build_icon(output_icns_path: str):
     print(f"✔ Successfully generated high-contrast ICNS icon at: {output_icns_path}")
 
 if __name__ == "__main__":
-    out_path = "/Users/Sergiu/AI/Time_Capsule/resources/TimeCapsule.icns"
-    os.makedirs("/Users/Sergiu/AI/Time_Capsule/resources", exist_ok=True)
+    project_root = Path(__file__).resolve().parent.parent
+    out_path = project_root / "resources" / "TimeCapsule.icns"
+    os.makedirs(out_path.parent, exist_ok=True)
     build_icon(out_path)

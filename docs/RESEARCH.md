@@ -1,6 +1,6 @@
 # Project 30: Personal AI Time Capsule — Model Research & Architecture Evaluation
 **Target Host Platform:** Apple Silicon M4 (Mac16,12), 10-Core CPU (4P + 6E), 10-Core GPU (Metal 4, MPS support), 24 GB Unified LPDDR5X-7500 Memory (120 GB/s bandwidth), macOS 27.0 (Darwin 27.0.0 arm64).  
-**Deployment Base Directory:** `/Users/Sergiu/AI`  
+**Deployment Base Directory:** `~/AI`  
 **Document Classification:** Technical Architecture & Hardware Feasibility Report  
 **Author:** Agent 2 (Local AI & Model Researcher)
 
@@ -44,7 +44,7 @@ The LLM serves as the cognitive kernel of the Time Capsule: it synthesizes autob
 | **Integration & Service** | CLI binary or C shared library (`libllama.dylib`); requires manual server loop. | Python package (`import mlx_lm`); easily integrated in native Python agents. | Local HTTP REST API (`127.0.0.1:11434`), native Open WebUI and OpenAI API compatibility. |
 
 **Host Machine Deployment Finding:**  
-Ollama is already installed and running locally (`/Users/Sergiu/.local/bin/ollama`) with models stored at `/Users/Sergiu/AI/models/ollama`. It provides full compatibility with the existing Open WebUI interface (`ai.iliev.us` on port 8080) and our custom Python orchestrator (`core/config.py`).
+Ollama is already installed and running locally (`ollama`) with models stored at `models/ollama`. It provides full compatibility with the existing Open WebUI interface (`ai.iliev.us` on port 8080) and our custom Python orchestrator (`core/config.py`).
 
 ### 1.2 Candidate LLM Evaluation on Apple M4
 
@@ -166,7 +166,7 @@ Speech transcription is responsible for converting raw audio and video archives 
 - **Throughput:** $\sim 2.5\text{--}4\text{x}$ Real-Time Factor (RTF $\approx 0.25$).
 
 #### 2. faster-whisper (CTranslate2 Runtime) — *Active in Environment*
-- **Mechanism:** Built on CTranslate2 (version 4.8.3 is already compiled and present in `/Users/Sergiu/AI/venv-webui`). Uses customized INT8/FP16 quantization, thread pooling, and fused layer norms.
+- **Mechanism:** Built on CTranslate2 (version 4.8.3 is already compiled and present in `venv`). Uses customized INT8/FP16 quantization, thread pooling, and fused layer norms.
 - **Apple Silicon Status:** Leverages optimized ARM NEON vector instructions and Accelerate BLAS framework.
 - **Throughput:** Up to $4\text{x}$ faster than vanilla PyTorch with $50\%$ memory reduction.
 - **Memory Footprint:** $\sim 1.2\text{ GB}$ for `small`, $\sim 2.1\text{ GB}$ for `large-v3-turbo`.
@@ -215,7 +215,7 @@ The memory retrieval subsystem powers the Time Capsule's associative recall. It 
 - **Parameter Count:** $22.7\text{M}$
 - **Embedding Dimension:** $384$
 - **Max Input Sequence:** $256\text{ tokens}$ (effective truncation at 128 tokens for high cosine fidelity)
-- **Storage Size:** $79\text{ MB}$ (cached at `/Users/Sergiu/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx.tar.gz`)
+- **Storage Size:** $79\text{ MB}$ (cached at `~/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx.tar.gz`)
 - **Latency on M4:** $<1.8\text{ ms}$ per sentence (ONNX Runtime, CoreML execution provider supported).
 - **Strengths:** Zero latency overhead; minimal memory footprint; native integration in ChromaDB `DefaultEmbeddingFunction`.
 - **Limitations:** Context length is too short for long multi-paragraph vlog transcripts. Higher risk of semantic compression loss over nuanced multi-decade life concepts.

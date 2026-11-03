@@ -10,7 +10,10 @@ PID_FILE="$LOG_DIR/f5_daemon.pid"
 LOG_FILE="$LOG_DIR/f5_daemon.log"
 mkdir -p "$LOG_DIR"
 
-PYTHON_BIN="/Users/Sergiu/AI/venv-voice/bin/python"
+PYTHON_BIN="${VENV_VOICE_PYTHON:-$PROJECT_ROOT/venv/bin/python}"
+if [ ! -f "$PYTHON_BIN" ]; then
+  PYTHON_BIN="$(which python3)"
+fi
 
 # Check if already running on port 7861
 if curl -s -m 1 http://127.0.0.1:7861/health > /dev/null 2>&1; then

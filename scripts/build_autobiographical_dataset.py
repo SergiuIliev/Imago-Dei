@@ -427,12 +427,16 @@ def create_fundamental_beliefs_qa_pairs(oversample: int = 5) -> List[Dict[str, A
     return pairs
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 def build_and_save_datasets(
-    db_path: str = "/Users/Sergiu/AI/Time_Capsule/data/capsule/archive.db",
-    output_dir: str = "/Users/Sergiu/AI/Time_Capsule/data/capsule/training",
+    db_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
     random_seed: int = 42
 ) -> Dict[str, Any]:
     """Generates the full training corpus and splits into train, valid, test jsonl files."""
+    db_path = db_path or os.environ.get("TIMECAPSULE_SQLITE_PATH", str(PROJECT_ROOT / "data" / "capsule" / "archive.db"))
+    output_dir = output_dir or str(PROJECT_ROOT / "data" / "capsule" / "training")
     random.seed(random_seed)
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -538,8 +542,6 @@ def build_and_save_datasets(
 
 
 if __name__ == "__main__":
-    db_loc = "/Users/Sergiu/AI/Time_Capsule/data/capsule/archive.db"
-    out_loc = "/Users/Sergiu/AI/Time_Capsule/data/capsule/training"
-    stats = build_and_save_datasets(db_loc, out_loc)
+    stats = build_and_save_datasets()
     print("\nDataset generation completed successfully:")
     print(json.dumps(stats, indent=2))

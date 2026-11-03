@@ -1,7 +1,7 @@
 # Engineering Task Board: Personal AI Time Capsule (Project 30)
 
 **Host Platform:** Apple Silicon M4 (macOS 27.0, 24 GB Unified Memory, Metal MPS)  
-**Root Working Directory:** `/Users/Sergiu/AI`  
+**Root Working Directory:** `~/AI`  
 **Current Status:** **DONE (MILESTONE 1 VERIFIED)**  
 
 ---

@@ -1,7 +1,7 @@
 # Local AI Assistant Deployment & Research Architecture
 **Host Environment:** Apple Silicon M4, macOS, 24 GB Unified Memory  
 **Public Ingress Domain:** `https://ai.iliev.us` (Cloudflare Tunnel `mac-ai`)  
-**Base Directory:** `/Users/Sergiu/AI`
+**Base Directory:** `~/AI`
 
 ---
 
@@ -19,7 +19,7 @@
                                   │ (Encrypted QUIC Argo Tunnel)
                                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Apple Silicon M4 Workstation (Local Sandbox: /Users/Sergiu/AI)   │
+│ Apple Silicon M4 Workstation (Local Sandbox: ~/AI)   │
 │                                                                 │
 │  ┌─────────────────────────┐                                    │
 │  │ cloudflared Connector   │                                    │
@@ -48,7 +48,7 @@
 1. **Zero External Port Forwarding**: No router ports (NAT) are opened. All ingress is proxied through an encrypted outbound Cloudflare QUIC tunnel.
 2. **API Non-Exposure**: The local Ollama inference API (`127.0.0.1:11434`) is bound strictly to `localhost` and is NEVER exposed to Cloudflare or external traffic. Only authenticated requests through Open WebUI (`127.0.0.1:8080`) can trigger model generation.
 3. **Authentication & RBAC**: Open WebUI enforces user login and session tokens. The initial registered account assumes primary administrator privileges.
-4. **Research Isolation Boundary**: The Heretic research environment operates in an isolated virtual environment (`/Users/Sergiu/AI/research/heretic/venv`) and sandbox directory. Experimental weight manipulations are kept separate from production models.
+4. **Research Isolation Boundary**: The Heretic research environment operates in an isolated virtual environment (`research/heretic/venv`) and sandbox directory. Experimental weight manipulations are kept separate from production models.
 
 ---
 
@@ -56,14 +56,14 @@
 
 | Directory | Purpose |
 |---|---|
-| `/Users/Sergiu/AI/bin` | Operational lifecycle scripts (`start.sh`, `stop.sh`, `status.sh`, `diagnostics.sh`, `backup.sh`, `restore.sh`) |
-| `/Users/Sergiu/AI/config` | Cloudflare tunnel tokens, ingress YAML, and Ollama environment flags |
-| `/Users/Sergiu/AI/models` | Local model weights, manifests, and blobs (`OLLAMA_MODELS`) |
-| `/Users/Sergiu/AI/data/open-webui` | Persistent chat history, user settings, and SQLite database (`webui.db`) |
-| `/Users/Sergiu/AI/data/backups` | Timestamped `.tar.gz` recovery archives (auto-retaining last 7 snapshots) |
-| `/Users/Sergiu/AI/logs` | Dedicated service logs (`ollama.log`, `open-webui.log`, `cloudflared.log`) |
-| `/Users/Sergiu/AI/research/heretic` | Mathematical refusal ablation framework & Optuna parameter exploration |
-| `/Users/Sergiu/AI/research/eval` | Benchmarking scripts (`run_benchmark.py`) and prompt evaluation datasets |
+| `bin` | Operational lifecycle scripts (`start.sh`, `stop.sh`, `status.sh`, `diagnostics.sh`, `backup.sh`, `restore.sh`) |
+| `config` | Cloudflare tunnel tokens, ingress YAML, and Ollama environment flags |
+| `models` | Local model weights, manifests, and blobs (`OLLAMA_MODELS`) |
+| `data/open-webui` | Persistent chat history, user settings, and SQLite database (`webui.db`) |
+| `data/backups` | Timestamped `.tar.gz` recovery archives (auto-retaining last 7 snapshots) |
+| `logs` | Dedicated service logs (`ollama.log`, `open-webui.log`, `cloudflared.log`) |
+| `research/heretic` | Mathematical refusal ablation framework & Optuna parameter exploration |
+| `research/eval` | Benchmarking scripts (`run_benchmark.py`) and prompt evaluation datasets |
 
 ---
 
@@ -72,25 +72,25 @@
 ### Service Management
 ```bash
 # Start all AI services (Ollama + Open WebUI + Cloudflare Tunnel)
-/Users/Sergiu/AI/bin/start.sh
+bin/start.sh
 
 # Check real-time service status and endpoints
-/Users/Sergiu/AI/bin/status.sh
+bin/status.sh
 
 # Run comprehensive system and GPU diagnostics
-/Users/Sergiu/AI/bin/diagnostics.sh
+bin/diagnostics.sh
 
 # Stop all AI services
-/Users/Sergiu/AI/bin/stop.sh
+bin/stop.sh
 ```
 
 ### Backup & Disaster Recovery
 ```bash
 # Generate immediate timestamped snapshot
-/Users/Sergiu/AI/bin/backup.sh
+bin/backup.sh
 
 # Restore from a backup archive
-/Users/Sergiu/AI/bin/restore.sh /Users/Sergiu/AI/data/backups/ai_backup_YYYYMMDD_HHMMSS.tar.gz
+bin/restore.sh data/backups/ai_backup_YYYYMMDD_HHMMSS.tar.gz
 ```
 
 ---

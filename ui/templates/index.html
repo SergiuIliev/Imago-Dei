@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Personal AI Time Capsule — Sergiu</title>
+  <title>Personal AI Time Capsule — Sergiu (v0.1.0)</title>
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('timecapsule_theme');
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = saved || (systemDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch(e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,8 +32,11 @@
           <span class="material-symbols-outlined" style="font-size:20px;">token</span>
         </div>
         <div class="app-titles">
-          <h2>Time Capsule</h2>
-          <span class="subtitle" title="&ldquo;Simplicity is complexity resolved.&rdquo; — Constantin Brâncuși">Personal AI Archive</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <h2>Time Capsule</h2>
+            <span class="m3-version-tag">v0.1.0</span>
+          </div>
+          <span class="subtitle" title="&ldquo;Simplicity is complexity resolved.&rdquo; — Constantin Brâncuși">Homo Deus Imago Dei Archive</span>
         </div>
       </div>
 
@@ -102,6 +115,11 @@
           <span>Memories: <strong id="statMemoriesCount">{{ stats.total_memories }}</strong></span>
           <span>Verified: <strong id="statVerifiedCount">{{ stats.verified_memories }}</strong></span>
         </div>
+        <div class="m3-version-footer">
+          <span>Release: <strong>v0.1.0</strong></span>
+          <span>·</span>
+          <span>Apple Silicon Metal</span>
+        </div>
       </div>
     </aside>
 
@@ -114,6 +132,13 @@
           <p id="pageSubhead" class="subhead">Evidence-grounded conversational synthesis across chronological eras</p>
         </div>
         <div class="app-bar-actions">
+          <!-- RAG Grounding & Internet Access Toggle Pill -->
+          <button id="ragModeToggleBtn" class="rag-mode-pill mode-airgapped" title="RAG Grounding & Internet Access (Click to change)">
+            <span class="material-symbols-outlined rag-mode-icon" id="ragModeIcon">lock</span>
+            <span class="rag-mode-label" id="ragModeLabel">Airgapped Local</span>
+            <span class="material-symbols-outlined dropdown-arrow">arrow_drop_down</span>
+          </button>
+
           <label class="m3-switch-label" title="Automatically speak assistant responses">
             <span class="m3-switch">
               <input type="checkbox" id="voiceAutoPlay">
@@ -125,6 +150,12 @@
             <span class="material-symbols-outlined" style="font-size:16px;">restart_alt</span>
             <span>Clear</span>
           </button>
+
+          <!-- Sleek Theme Toggle Button -->
+          <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle theme">
+            <span class="material-symbols-outlined theme-icon" id="themeIcon">light_mode</span>
+          </button>
+
           <span class="m3-status-pill status-active" title="Security guarantee: loopback only">
             <span class="material-symbols-outlined" style="font-size:14px;">shield_lock</span>
             <span>Loopback</span>
@@ -210,7 +241,7 @@
             <div class="m3-card-body">
               <p>Operating in local foundation mode with verified reference recordings.</p>
               <div class="m3-input-group">
-                <input type="text" id="vlogPathInput" placeholder="/Users/Sergiu/Movies/Vlogs">
+                <input type="text" id="vlogPathInput" placeholder="/path/to/your/personal/vlogs">
                 <button id="saveVlogPathBtn" class="m3-btn m3-btn-tonal">Save Path</button>
               </div>
             </div>
@@ -376,35 +407,47 @@
             <div class="m3-card-header">
               <h3 style="font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px;">
                 <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:20px;">memory</span>
-                <span>Current Architecture: Version 4.0 (Dialectical Grounding & Parametric Fallback Bridge)</span>
+                <span>Current Architecture: Version 0.1.0 (Homo Deus Imago Dei Sovereign Intelligence)</span>
               </h3>
             </div>
             <div class="m3-card-body">
               <p style="color:var(--text-medium); line-height:1.6; font-size:13px; margin-bottom:12px;">
-                The Personal AI Time Capsule is a 100% private, on-device intelligence platform running locally on Apple Silicon (M4).
-                It synthesizes autobiographical identity, vocal prosody, and temporal philosophies across years of recorded video logs without transmitting a single byte to third-party cloud services.
+                The Personal AI Time Capsule is a 100% sovereign, on-device cognitive archive running locally on Apple Silicon (M4 Metal).
+                Rooted in the <strong>Homo Deus Imago Dei</strong> philosophy, it creates an autonomous, mathematically grounded computational mirror of your evolving cognition, values, and vocal prosody across decades without leaking a single byte of telemetry to third-party cloud hyperscalers.
               </p>
-              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:8px;">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-top:8px;">
                 <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
-                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🧠 Parametric Fallback Bridge</strong>
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🛡️ Public Secure Double Audit</strong>
                   <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
-                    Reconciles low-confidence retrieval with parametric memory via standardized prefix: <em>&ldquo;Memory not found. The closest memories are below. Based on fine-tuning, I can provide the following answer:&rdquo;</em>
+                    Two-layer privacy guarantee: Layer 1 static AST/secret scanning preventing credentials from entering builds + Layer 2 runtime semantic leak interception.
                   </span>
                 </div>
                 <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
-                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">⚖️ Dialectical Belief Rigor</strong>
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🌐 Tri-Mode Internet RAG Engine</strong>
                   <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
-                    34 consolidated temporal beliefs requiring &ge; 2 corroborated sources to supersede. Includes millisecond timestamps for both supporting evidence and dialectical counterarguments.
+                    Airgapped Local (100% offline), Jev-Controlled Internet (TypeSafe AI single-token verification gating before external search), and Open Web grounding.
                   </span>
                 </div>
                 <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
-                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🔊 De-Hummed Neural Voice</strong>
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🧠 Open-Weights Model Pipeline</strong>
                   <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
-                    F5-TTS Metal MPS diffusion coupled with 4th-order 75Hz high-pass, 50/60/100/120Hz precision IIR notch filtering, and noise squelch eliminating electrical mains hum.
+                    Automated ingestion and unified memory headroom profiler supporting LLaMA 3.3, Qwen 2.5, DeepSeek-R1, Mistral, Gemma 2, and Phi-4 with Apple Silicon MPS detection.
                   </span>
                 </div>
                 <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
-                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🎭 Vision-Verified Avatar</strong>
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🌓 Obsidian & Paper Light Themes</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    Brâncuși minimalism: obsidian slate dark mode and pure minimalist paper aesthetic with instant theme switching, localStorage persistence, and system matchMedia support.
+                  </span>
+                </div>
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🔊 De-Hummed Neural Voice & ASR</strong>
+                  <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
+                    F5-TTS Metal MPS flow-matching diffusion, 4th-order 75Hz HP + surgical 50/60/100/120Hz high-Q IIR notch filtering, and push-to-talk Whisper ASR.
+                  </span>
+                </div>
+                <div style="background:var(--bg-glass); border:1px solid var(--border-subtle); border-radius:8px; padding:12px;">
+                  <strong style="color:var(--text-high); font-size:13px; display:block; margin-bottom:4px;">🎭 Vision-Verified Avatar Sync</strong>
                   <span style="font-size:12px; color:var(--text-muted); line-height:1.4; display:block;">
                     LivePortrait C¹ diffeomorphic vector smoothing with boundary alpha feathering, HSV enamel protection, and 0.000000ms LCM audio-video framing sync.
                   </span>
@@ -428,10 +471,41 @@
 
               <!-- Evolution Accordion / Cards -->
               <div class="architecture-timeline">
-                <!-- Version 4.0 -->
+                <!-- Version 0.1.0 -->
                 <div class="version-block current-version">
                   <div class="version-header">
-                    <span class="version-badge current">v4.0 · CURRENT</span>
+                    <span class="version-badge current">v0.1.0 · CURRENT</span>
+                    <h4 class="version-title">Homo Deus Imago Dei: Sovereign Architecture, Double Privacy Audit & Tri-Mode Internet RAG</h4>
+                    <span class="version-date">November 2026</span>
+                  </div>
+                  <div class="version-content">
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>LLM & Parametric Architecture:</strong>
+                        <p>Latest open-weights model family ingestion (LLaMA 3.3, Qwen 2.5, DeepSeek-R1, Mistral, Gemma 2, Phi-4) with automated VRAM memory profiling. Dynamic Parametric Fallback Bridge with dual-model Jev verification (<code>qwen3:4b-heretic</code>) enforcing honest epistemic uncertainty.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Security & Double Privacy Audit:</strong>
+                        <p>Public secure double audit system: Layer 1 static secret & PII scanning preventing credentials or private identities from entering the build, and Layer 2 runtime semantic leak interception sanitizing RAG prompts and API outputs before disk or network transmission.</p>
+                      </div>
+                    </div>
+                    <div class="version-spec-row">
+                      <div class="spec-col">
+                        <strong>Internet Access & RAG Grounding:</strong>
+                        <p>Tri-mode RAG engine: 🔒 <strong>Airgapped Local</strong> (100% offline SQLite FTS5 + ChromaDB embeddings), 🛡️ <strong>Jev-Controlled Web</strong> (TypeSafe AI single-token verification gating before external search with prompt injection filtering), and 🌐 <strong>Open Web</strong> for contemporary real-time queries.</p>
+                      </div>
+                      <div class="spec-col">
+                        <strong>Interface & Visual Aesthetics:</strong>
+                        <p>High-contrast White / Dark theme system with obsidian dark mode and pure minimalist paper aesthetic (Brâncuși simplicity). Live RAG mode switcher badge, instant theme toggle with localStorage persistence, and responsive mobile-ready drawer navigation.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Version 0.0.4 -->
+                <div class="version-block">
+                  <div class="version-header">
+                    <span class="version-badge">v0.0.4</span>
                     <h4 class="version-title">Dialectical Grounding, Parametric Fallback Bridge & Brâncuși Minimalism</h4>
                     <span class="version-date">October 2026</span>
                   </div>
@@ -578,6 +652,76 @@
       <div class="m3-dialog-actions">
         <button id="cancelCorrectionBtn" class="m3-btn m3-btn-text">Cancel</button>
         <button id="saveCorrectionBtn" class="m3-btn m3-btn-filled">Save & Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAG Grounding & Internet Access Selection Dialog -->
+  <div id="ragModeModal" class="m3-dialog-scrim" style="display:none;">
+    <div class="m3-dialog-card rag-modal-card">
+      <div class="dialog-header-with-close">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="material-symbols-outlined" style="color:var(--color-accent); font-size:22px;">public</span>
+          <h2 style="font-size:16px; font-weight:600; color:var(--text-high);">RAG Grounding & Internet Access</h2>
+        </div>
+        <button class="modal-close-btn" id="closeRagModeModalBtn" title="Close">
+          <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+        </button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-top:6px; margin-bottom:16px; line-height:1.5;">
+        Configure how the conversational synthesis engine grounds knowledge. Local autobiographical privacy remains sovereign at all times.
+      </p>
+
+      <div class="rag-options-list">
+        <!-- Option 1: Airgapped Local -->
+        <label class="rag-option-item selected" data-mode="airgapped">
+          <input type="radio" name="ragModeRadio" value="airgapped" checked>
+          <div class="rag-option-icon shield-green">
+            <span class="material-symbols-outlined">lock</span>
+          </div>
+          <div class="rag-option-content">
+            <div class="rag-option-title-row">
+              <strong class="rag-option-title">Airgapped Local</strong>
+              <span class="rag-option-tag tag-default">Default · 100% Offline</span>
+            </div>
+            <p class="rag-option-desc">Strictly offline memory retrieval. Zero external network requests. All answers are grounded purely in on-device SQLite FTS5 and ChromaDB vector archives.</p>
+          </div>
+        </label>
+
+        <!-- Option 2: Jev-Gated Web -->
+        <label class="rag-option-item" data-mode="jev_controlled">
+          <input type="radio" name="ragModeRadio" value="jev_controlled">
+          <div class="rag-option-icon shield-amber">
+            <span class="material-symbols-outlined">verified_user</span>
+          </div>
+          <div class="rag-option-content">
+            <div class="rag-option-title-row">
+              <strong class="rag-option-title">Jev-Gated Web</strong>
+              <span class="rag-option-tag tag-verified">TypeSafe AI Gated</span>
+            </div>
+            <p class="rag-option-desc">TypeSafe AI single-token verification gating. External search only triggers if Jev decides personal context is insufficient, sanitizing all external snippets before synthesis.</p>
+          </div>
+        </label>
+
+        <!-- Option 3: Open Web -->
+        <label class="rag-option-item" data-mode="open_internet">
+          <input type="radio" name="ragModeRadio" value="open_internet">
+          <div class="rag-option-icon shield-purple">
+            <span class="material-symbols-outlined">public</span>
+          </div>
+          <div class="rag-option-content">
+            <div class="rag-option-title-row">
+              <strong class="rag-option-title">Open Web</strong>
+              <span class="rag-option-tag tag-open">Real-Time Search</span>
+            </div>
+            <p class="rag-option-desc">Augments memory retrieval with real-time web search for questions requiring contemporary external context, market data, or current developments.</p>
+          </div>
+        </label>
+      </div>
+
+      <div class="m3-dialog-actions" style="margin-top:20px;">
+        <button id="cancelRagModeBtn" class="m3-btn m3-btn-text">Cancel</button>
+        <button id="applyRagModeBtn" class="m3-btn m3-btn-filled">Apply Mode</button>
       </div>
     </div>
   </div>

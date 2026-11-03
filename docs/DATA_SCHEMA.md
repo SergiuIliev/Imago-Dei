@@ -3,7 +3,7 @@
 **Database Engine:** SQLite 3.53+ with WAL Mode & FTS5  
 **Vector Engine:** ChromaDB Persistent Client (ONNX `all-MiniLM-L6-v2`, 384-dimensional cosine distance)  
 **Schema Version:** 1  
-**Default Storage Location:** `/Users/Sergiu/AI/data/capsule/archive.db`
+**Default Storage Location:** `data/capsule/archive.db`
 
 ---
 

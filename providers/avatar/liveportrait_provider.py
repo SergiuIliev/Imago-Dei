@@ -58,7 +58,7 @@ class LivePortraitAvatarProvider(AvatarProvider):
 
     def __init__(
         self,
-        output_dir: str = "/Users/Sergiu/AI/Time_Capsule/data/capsule/avatar_cache",
+        output_dir: Optional[str] = None,
         target_fps: int = 25,
         resolution: str = "512x512",
         reference_portrait: Optional[str] = None,
@@ -66,7 +66,8 @@ class LivePortraitAvatarProvider(AvatarProvider):
         portraits_dir: Optional[str] = None,
         driving_loops_dir: Optional[str] = None
     ):
-        self.output_dir = Path(output_dir)
+        project_root = Path(__file__).resolve().parent.parent.parent
+        self.output_dir = Path(output_dir or (project_root / "data" / "capsule" / "avatar_cache"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.target_fps = target_fps
         self.resolution = resolution
@@ -74,7 +75,7 @@ class LivePortraitAvatarProvider(AvatarProvider):
         self.driving_video = driving_video
 
         # Setup asset directories
-        base_portraits = Path(portraits_dir) if portraits_dir else Path("/Users/Sergiu/AI/Time_Capsule/data/capsule/portraits")
+        base_portraits = Path(portraits_dir) if portraits_dir else (project_root / "data" / "capsule" / "portraits")
         self.portraits_dir = base_portraits
         self.driving_loops_dir = Path(driving_loops_dir) if driving_loops_dir else (self.portraits_dir / "driving_loops")
         self.portraits_dir.mkdir(parents=True, exist_ok=True)
@@ -129,9 +130,10 @@ class LivePortraitAvatarProvider(AvatarProvider):
             return self.reference_portrait
 
         # Check config files
+        project_root = Path(__file__).resolve().parent.parent.parent
         config_candidates = [
-            Path("/Users/Sergiu/AI/Time_Capsule/config/timecapsule/config.json"),
-            Path("/Users/Sergiu/AI/config/timecapsule/config.json")
+            project_root / "config" / "timecapsule" / "config.json",
+            project_root.parent / "config" / "timecapsule" / "config.json"
         ]
         for cfg_path in config_candidates:
             if cfg_path.exists():

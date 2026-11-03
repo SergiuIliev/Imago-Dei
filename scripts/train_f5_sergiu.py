@@ -22,7 +22,12 @@ from safetensors.torch import load_file
 
 # Set environment
 os.environ["PYTHONHASHSEED"] = "0"
-os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+try:
+    import imageio_ffmpeg
+    ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+    os.environ["PATH"] = f"{ffmpeg_dir}:{os.environ.get('PATH', '')}"
+except Exception:
+    pass
 
 # Use 8 threads on Apple Silicon M4 for optimal CPU performance
 torch.set_num_threads(8)
@@ -35,7 +40,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASET_DIR = PROJECT_ROOT / "data" / "capsule" / "voice_training" / "f5_processed"
 CKPT_DIR = PROJECT_ROOT / "data" / "capsule" / "voice_training" / "checkpoints"
 FINAL_CKPT = PROJECT_ROOT / "data" / "capsule" / "voice_training" / "sergiu_f5_finetuned.pt"
-BASE_CKPT = Path("/Users/Sergiu/.cache/huggingface/hub/models--SWivid--F5-TTS/snapshots/84e5a410d9cead4de2f847e7c9369a6440bdfaca/F5TTS_v1_Base/model_1250000.safetensors")
+hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+BASE_CKPT = Path(os.environ.get("F5TTS_BASE_CKPT", str(hf_home / "hub" / "models--SWivid--F5-TTS" / "snapshots" / "84e5a410d9cead4de2f847e7c9369a6440bdfaca" / "F5TTS_v1_Base" / "model_1250000.safetensors")))
 
 
 def main():

@@ -23,11 +23,17 @@ class TestAPIEndpoints(unittest.TestCase):
         cls.client = TestClient(app)
 
     def test_serve_index_html(self):
-        """Verifies root endpoint serves HTML dashboard."""
+        """Verifies root endpoint serves HTML dashboard with v0.1.0, theme toggle, and RAG mode."""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Personal AI Time Capsule", resp.text)
         self.assertIn("Active Persona Snapshot", resp.text)
+        self.assertIn("v0.1.0", resp.text)
+        self.assertIn("themeToggleBtn", resp.text)
+        self.assertIn("ragModeToggleBtn", resp.text)
+        self.assertIn("ragModeModal", resp.text)
+        self.assertIn("Homo Deus Imago Dei", resp.text)
+        self.assertIn("data-theme", resp.text)
 
     def test_api_health(self):
         """Verifies health check returns subsystem statuses."""
@@ -170,6 +176,35 @@ class TestAPIEndpoints(unittest.TestCase):
             self.assertEqual(data["status"], "ok")
             self.assertIn("transcription", data)
             self.assertGreater(len(data["transcription"]), 10)
+
+    def test_api_rag_mode(self):
+        """Verifies GET and POST /api/settings/rag_mode."""
+        # 1. Get current mode
+        resp = self.client.get("/api/settings/rag_mode")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("mode", data)
+        self.assertIn("allowed_modes", data)
+        self.assertIn(data["mode"], ["airgapped", "jev_controlled", "open_internet"])
+
+        # 2. Update to jev_controlled
+        post_resp = self.client.post("/api/settings/rag_mode", json={"mode": "jev_controlled"})
+        self.assertEqual(post_resp.status_code, 200)
+        self.assertEqual(post_resp.json()["mode"], "jev_controlled")
+
+        # 3. Verify it persisted
+        get_resp = self.client.get("/api/settings/rag_mode")
+        self.assertEqual(get_resp.json()["mode"], "jev_controlled")
+
+        # 4. Reject invalid mode
+        invalid_resp = self.client.post("/api/settings/rag_mode", json={"mode": "invalid_mode_xyz"})
+        self.assertEqual(invalid_resp.status_code, 400)
+
+        # 5. Restore to airgapped
+        restore_resp = self.client.post("/api/settings/rag_mode", json={"mode": "airgapped"})
+        self.assertEqual(restore_resp.status_code, 200)
+        self.assertEqual(restore_resp.json()["mode"], "airgapped")
+
 
 
 if __name__ == "__main__":

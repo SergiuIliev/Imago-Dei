@@ -4,7 +4,7 @@ Canonical Reference Portrait & Era-Specific Stabilized Video Driving Loop Extrac
 Part of Project 30 (Personal AI Time Capsule).
 
 Functionality:
-1. Manages /Users/Sergiu/AI/Time_Capsule/data/capsule/portraits and driving_loops directories.
+1. Manages data/capsule/portraits and driving_loops directories.
 2. Scans Google Pixel motion/still portraits (.MP.jpg, .jpg) and 4K MP4 daily speak recordings
    in '/Volumes/SSD/Photography/_Daily Speak Project' (or fallback paths).
 3. Groups media into temporal eras: 2023, 2024, 2025, 2026.
@@ -68,7 +68,7 @@ FALLBACK_MEDIA_DIRS = [
 
 CONFIG_PATHS = [
     PROJECT_ROOT / "config" / "timecapsule" / "config.json",
-    Path("/Users/Sergiu/AI/config/timecapsule/config.json"),
+    PROJECT_ROOT.parent / "config" / "timecapsule" / "config.json",
 ]
 
 CASCADE_FACE = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -835,7 +835,7 @@ def find_candidate_media() -> Optional[Path]:
     """Scans local vlog, portrait, and website storage paths for video/image assets."""
     direct_candidates = [
         PORTRAITS_DIR / "sergiu_framed_portrait.png",
-        Path("/Users/Sergiu/Library/CloudStorage/GoogleDrive-sergiu.iliev@sj-webdesign.com/My Drive/Shared/Apps/All AI agents/projects/websites/iliev.us/images/google_profile.jpg"),
+        Path(os.environ.get("CANDIDATE_PROFILE_IMAGE", "")) if os.environ.get("CANDIDATE_PROFILE_IMAGE") else Path("resources/profile_placeholder.jpg"),
         PORTRAITS_DIR / "sergiu_macos_profile.jpg",
         PORTRAITS_DIR / "sergiu_real_portrait.png",
     ]

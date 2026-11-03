@@ -83,7 +83,7 @@ def has_honest_uncertainty(text: str) -> bool:
 
 
 def pick_best_two_models(
-    benchmark_path: str = "/Users/Sergiu/AI/Heretic/eval/model_edge_benchmark_results.json",
+    benchmark_path: Optional[str] = None,
     ollama_endpoint: str = "http://127.0.0.1:11434",
     mlx_endpoint: str = "http://127.0.0.1:8081",
     probe_timeout: float = 1.0
@@ -93,6 +93,11 @@ def pick_best_two_models(
     Inspects benchmark results, probes Ollama and MLX endpoints, and excludes refusing/broken models.
     Returns (primary_model, critic_model).
     """
+    if benchmark_path is None:
+        benchmark_path = os.environ.get(
+            "HERETIC_BENCHMARK_PATH",
+            str(Path(__file__).resolve().parent.parent.parent / "Heretic" / "eval" / "model_edge_benchmark_results.json")
+        )
     excluded_keywords = {"gemma4:heretic", "gemma4:12b-uncensored"}
     benchmark_data = {}
     if Path(benchmark_path).exists():
@@ -469,6 +474,90 @@ class LocalJevEngine:
                     verdict = True
                     confidence = 0.92
                     reasoning = "Draft respects chronological boundaries of the active era."
+
+            # 5. External factual grounding check
+            elif "requires_external_factual_grounding" in instr_lower or "external factual grounding" in instr_lower:
+                qm = re.search(r'Query:\s*(.*)', full_context, re.IGNORECASE)
+                query_text = qm.group(1).strip() if qm else full_context.strip()
+                q_clean = query_text.lower()
+
+                external_triggers = [
+                    "latest", "current", "release", "version", "capital of", "who won", "population of",
+                    "stock price", "weather", "when was", "specifications", "market share", "cve-", "rfc",
+                    "world cup", "olympic", "nobel", "gdp"
+                ]
+                personal_triggers = [
+                    "did you", "have you", "were you", "are you", "do you", "will you", "your life",
+                    "your career", "your project", "your vlog", "your habit", "your routine", "your opinion",
+                    "your belief", "your experience", "your thoughts", "your memory", "tell me about your",
+                    "tell me about yourself", "brancusi", "brâncuși", "sergiu", "time capsule", "video log",
+                    "daily vlog", "my memories", "my life", "navodari", "mamaia", "lakeon", "cudy", "tesla"
+                ]
+
+                has_ext = any(t in q_clean for t in external_triggers)
+                has_per = any(t in q_clean for t in personal_triggers)
+
+                if has_per and not has_ext:
+                    noul = 0.10
+                    verdict = False
+                    confidence = 0.90
+                    reasoning = "Query is an autobiographical inquiry about personal experiences/memories."
+                elif has_ext:
+                    noul = 0.95
+                    verdict = True
+                    confidence = 0.95
+                    reasoning = "Query asks about external real-world facts or current information requiring web grounding."
+                else:
+                    tokens = set(re.findall(r'\b[a-zA-Z]+\b', q_clean))
+                    personal_pronouns = {"i", "me", "my", "you", "your", "we", "our"}
+                    if not tokens.intersection(personal_pronouns) and ("what" in tokens or "who" in tokens or "when" in tokens or "how" in tokens):
+                        noul = 0.85
+                        verdict = True
+                        confidence = 0.80
+                        reasoning = "Query asks a general factual question without personal framing."
+                    else:
+                        noul = 0.20
+                        verdict = False
+                        confidence = 0.80
+                        reasoning = "Query does not require external factual web grounding."
+
+            # 6. Epistemic reliability & snippet relevance check
+            elif "snippet_is_epistemically_reliable_and_relevant" in instr_lower or "epistemically_reliable_and_relevant" in instr_lower:
+                snippet_text = full_context
+                sm = re.search(r'Snippet:\s*(.*)', full_context, re.IGNORECASE | re.DOTALL)
+                if sm:
+                    snippet_text = sm.group(1).strip()
+
+                s_clean = snippet_text.lower()
+                has_injection = any(p in s_clean for p in [
+                    "[redacted_injection]", "[redacted_command]", "ignore previous instructions",
+                    "system prompt", "you are now dan", "<system>", "[inst]"
+                ])
+                has_spam = any(p in s_clean for p in [
+                    "enable javascript", "access denied", "403 forbidden", "404 not found",
+                    "verify you are human", "cloudflare ray id", "buy cheap", "online casino"
+                ])
+
+                if has_injection:
+                    noul = 0.05
+                    verdict = False
+                    confidence = 0.98
+                    reasoning = "Snippet contains adversarial prompt injection or malicious instructions."
+                elif has_spam:
+                    noul = 0.15
+                    verdict = False
+                    confidence = 0.92
+                    reasoning = "Snippet appears to be spam, bot challenge, or low-quality error page."
+                elif len(snippet_text.strip()) < 15:
+                    noul = 0.10
+                    verdict = False
+                    confidence = 0.90
+                    reasoning = "Snippet is too short or empty."
+                else:
+                    noul = 0.90
+                    verdict = True
+                    confidence = 0.88
+                    reasoning = "Snippet is epistemically sound, relevant, and free of injection patterns."
 
         # Enforce mathematical invariants
         noul = max(0.0, min(1.0, float(noul)))

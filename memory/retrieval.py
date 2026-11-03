@@ -90,16 +90,18 @@ class RetrievedEvidence:
         self,
         memory: MemoryItem,
         score: float,
-        retrieval_method: str, # "keyword", "semantic", "hybrid_rrf"
+        retrieval_method: str, # "keyword", "semantic", "hybrid_rrf", "web_search"
         media_source: Optional[MediaSource] = None,
         transcript_segment: Optional[TranscriptSegment] = None,
-        audio_clip_url: Optional[str] = None
+        audio_clip_url: Optional[str] = None,
+        citation_override: Optional[str] = None
     ):
         self.memory = memory
         self.score = score
         self.retrieval_method = retrieval_method
         self.media_source = media_source
         self.transcript_segment = transcript_segment
+        self.citation_override = citation_override
 
         if audio_clip_url:
             self.audio_clip_url = audio_clip_url
@@ -114,6 +116,8 @@ class RetrievedEvidence:
 
     def format_citation(self) -> str:
         """Generates a transparent citation string detailing provenance and verification status."""
+        if getattr(self, "citation_override", None):
+            return self.citation_override
         status_label = f"[{self.memory.verification_status.value.upper()}]"
         date_str = self.memory.date_occurred or "Date Unknown"
         time_range = ""
@@ -135,7 +139,7 @@ class RetrievedEvidence:
         ):
             audio_clip_url = f"/api/media/{self.memory.source_id}/clip?start={self.memory.start_seconds}&end={self.memory.end_seconds}"
 
-        return {
+        d = {
             "memory": self.memory.to_dict(),
             "score": round(self.score, 4),
             "retrieval_method": self.retrieval_method,
@@ -144,6 +148,9 @@ class RetrievedEvidence:
             "transcript_segment": self.transcript_segment.to_dict() if self.transcript_segment else None,
             "audio_clip_url": audio_clip_url
         }
+        if getattr(self, "citation_override", None):
+            d["citation_override"] = self.citation_override
+        return d
 
 
 class HybridRetrievalProvider:
@@ -158,7 +165,9 @@ class HybridRetrievalProvider:
         vector_weight: float = 0.5,
         min_evidence_threshold: float = 0.012,
         min_semantic_similarity: float = 0.70,
-        jev_engine: Optional[Any] = None
+        jev_engine: Optional[Any] = None,
+        internet_engine: Optional[Any] = None,
+        rag_mode: str = "airgapped"
     ):
         self.db = db
         self.vector_store = vector_store
@@ -168,6 +177,8 @@ class HybridRetrievalProvider:
         self.min_evidence_threshold = min_evidence_threshold
         self.min_semantic_similarity = min_semantic_similarity
         self.jev_engine = jev_engine
+        self.internet_engine = internet_engine
+        self.rag_mode = rag_mode
 
     def _matches_era(self, date_occurred: Optional[str], era_filter: Optional[str]) -> bool:
         if not era_filter:
@@ -216,10 +227,13 @@ class HybridRetrievalProvider:
         query: str,
         limit: int = 5,
         status_filter: Optional[str] = None,
-        era_filter: Optional[str] = None
+        era_filter: Optional[str] = None,
+        rag_mode: Optional[str] = None
     ) -> Tuple[List[RetrievedEvidence], bool]:
         """
         Executes hybrid retrieval using Reciprocal Rank Fusion.
+        Optionally augments local archive memories with live external web knowledge
+        when rag_mode is 'jev_controlled' or 'open_internet'.
         Returns:
             Tuple of (List[RetrievedEvidence], has_sufficient_evidence: bool)
         """
@@ -271,12 +285,20 @@ class HybridRetrievalProvider:
             vector_matched_ids.add(mem_id)
             rrf_scores[mem_id] = rrf_scores.get(mem_id, 0.0) + (self.vector_weight / (self.rrf_k + rank + 1))
 
-        if not rrf_scores:
-            return ([], False)
-
-        # Sort candidate memories by RRF score descending
-        ranked_candidates = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+        ranked_candidates = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:limit] if rrf_scores else []
         if not ranked_candidates:
+            effective_rag_mode = rag_mode or self.rag_mode or "airgapped"
+            if effective_rag_mode != "airgapped" and self.internet_engine:
+                try:
+                    web_evidence, _ = self.internet_engine.retrieve_web_evidence(
+                        query=query,
+                        rag_mode=effective_rag_mode,
+                        limit=limit
+                    )
+                    if web_evidence:
+                        return (web_evidence, True)
+                except Exception:
+                    pass
             return ([], False)
 
         top_id, top_score = ranked_candidates[0]
@@ -335,5 +357,22 @@ class HybridRetrievalProvider:
                 media_source=media_src,
                 transcript_segment=transcript_seg
             ))
+
+        # Augment with live external web retrieval if requested and configured
+        effective_rag_mode = rag_mode or self.rag_mode or "airgapped"
+        if effective_rag_mode != "airgapped" and self.internet_engine:
+            try:
+                web_evidence, _ = self.internet_engine.retrieve_web_evidence(
+                    query=query,
+                    rag_mode=effective_rag_mode,
+                    limit=limit
+                )
+                if web_evidence:
+                    # Append web evidence behind local autobiographical memories
+                    evidence_list = evidence_list + web_evidence
+                    if not has_sufficient_evidence:
+                        has_sufficient_evidence = True
+            except Exception:
+                pass
 
         return (evidence_list, has_sufficient_evidence)

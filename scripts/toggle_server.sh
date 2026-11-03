@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PLIST_PATH="/Users/Sergiu/AI/config/com.sergiu.timecapsule.plist"
+PLIST_PATH="${TIMECAPSULE_PLIST_PATH:-$PROJECT_ROOT/config/com.sergiu.timecapsule.plist}"
 UID_NUM="$(id -u)"
 
 # Check if port 7860 is running

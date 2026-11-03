@@ -139,12 +139,14 @@ class ConversationEngine:
         era_id: Optional[str] = None,
         verification_filter: Optional[str] = None,
         force_simulation: bool = False,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        rag_mode: Optional[str] = None
     ) -> ConversationResponse:
         """
         Processes a conversational inquiry from the user.
         Supports multi-turn session memory, coreference query expansion,
-        temporal belief retrieval, and grounded first-person generation.
+        temporal belief retrieval, grounded first-person generation, and
+        optional live internet web RAG (airgapped, jev_controlled, open_internet).
         """
         # 1. Resolve chronological snapshot
         active_era: Optional[PersonaSnapshot] = None
@@ -181,8 +183,11 @@ class ConversationEngine:
             query=retrieval_query,
             limit=5,
             status_filter=verification_filter,
-            era_filter=effective_era_filter
+            era_filter=effective_era_filter,
+            rag_mode=rag_mode
         )
+
+        has_web_evidence = any("[WEB SEARCH" in ev.format_citation() for ev in evidence_list)
 
         # 5. Retrieve relevant temporal beliefs using enhanced FTS5 matching
         matched_beliefs: List[TemporalBelief] = []
@@ -236,6 +241,12 @@ class ConversationEngine:
             else:
                 prompt_parts.append(f"[Request: Simulate how you would reason about this from the perspective of {active_era.era_name if active_era else 'your past self'}. Prefix response with [SIMULATED PERSPECTIVE].]")
 
+        if has_web_evidence:
+            prompt_parts.append(
+                "[Note: Verified external web evidence has been retrieved for this query. "
+                "Synthesize the external facts accurately while maintaining your authentic first-person voice.]"
+            )
+
         user_prompt = "\n".join(prompt_parts)
 
         # 9. Call LLM (Model 1)
@@ -269,7 +280,7 @@ class ConversationEngine:
             "hello", "hi", "hey", "good morning", "good afternoon", "good evening", "greetings"
         }
 
-        if not has_evidence and not force_simulation and not is_greeting:
+        if not has_evidence and not force_simulation and not is_greeting and not has_web_evidence:
             # Check if standardized prefix is already cleanly present
             has_prefix = (
                 "memory not found" in model_output.lower() and
@@ -348,7 +359,9 @@ class ConversationEngine:
             "model_info": self.llm.get_model_info(),
             "query": query,
             "retrieval_query": retrieval_query if session_id else query,
-            "history_length": len(history)
+            "history_length": len(history),
+            "rag_mode": rag_mode or getattr(self.retrieval, "rag_mode", "airgapped"),
+            "has_web_evidence": has_web_evidence
         }
         if jev_telemetry:
             metadata["jev_verification"] = jev_telemetry

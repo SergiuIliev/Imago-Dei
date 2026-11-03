@@ -30,10 +30,11 @@ from core.models import (
     EmotionCategory,
     ExpressiveDeliveryParams
 )
-from core.config import CapsuleConfig, ensure_directories
+from core.config import CapsuleConfig, ensure_directories, APP_VERSION
 from memory.database import DatabaseManager
 from memory.vector_store import VectorStore
 from memory.retrieval import HybridRetrievalProvider
+from memory.internet_retrieval import InternetRetrievalEngine, VALID_RAG_MODES
 from memory.backup import BackupManager
 from core.personality import PersonalityProfile
 from core.conversation import ConversationEngine
@@ -54,7 +55,7 @@ ensure_directories(config)
 app = FastAPI(
     title="Personal AI Time Capsule",
     description="Locally runnable private AI representation preserving personal memory, voice, and evolving identity.",
-    version="1.0.0"
+    version=APP_VERSION
 )
 
 # Mount static files and templates
@@ -70,7 +71,16 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # Initialize Subsystems
 db = DatabaseManager(config.storage.sqlite_db_path)
 vector_store = VectorStore(config.storage.chroma_dir)
-retrieval = HybridRetrievalProvider(db, vector_store)
+internet_engine = InternetRetrievalEngine(
+    jev_engine=None,
+    default_mode=config.internet_rag_mode
+)
+retrieval = HybridRetrievalProvider(
+    db,
+    vector_store,
+    internet_engine=internet_engine,
+    rag_mode=config.internet_rag_mode
+)
 backup_mgr = BackupManager(config, db)
 
 # Select LLM Provider
@@ -100,6 +110,7 @@ if getattr(config.llm, "enable_jev_verification", True):
         critic_model=critic_m
     )
     retrieval.jev_engine = critic_engine
+    internet_engine.jev_engine = critic_engine
 
 personality = PersonalityProfile()
 conversation_engine = ConversationEngine(retrieval, db, llm, personality, jev_verifier=jev_verifier)
@@ -150,6 +161,7 @@ class ChatRequest(BaseModel):
     synthesize_avatar: bool = False
     force_simulation: bool = False
     session_id: Optional[str] = None
+    rag_mode: Optional[str] = None
 
 
 class SessionCreateRequest(BaseModel):
@@ -246,7 +258,8 @@ def chat_endpoint(req: ChatRequest):
         era_id=req.era_id,
         verification_filter=req.verification_filter,
         force_simulation=req.force_simulation,
-        session_id=req.session_id
+        session_id=req.session_id,
+        rag_mode=req.rag_mode
     )
 
     audio_url = None
@@ -385,7 +398,8 @@ async def transcribe_audio(audio: UploadFile = File(...)):
 
     wav_path = None
     transcribe_target = tmp_path
-    ffmpeg_bin = "/Users/Sergiu/AI/venv-voice/bin/ffmpeg"
+    import shutil
+    ffmpeg_bin = os.environ.get("FFMPEG_BIN") or shutil.which("ffmpeg") or "ffmpeg"
     if os.path.exists(ffmpeg_bin):
         try:
             wav_path = tmp_path + ".converted.wav"
@@ -675,3 +689,52 @@ async def create_backup():
 async def get_config():
     """Returns application configuration."""
     return config.to_dict()
+
+
+class RAGModeRequest(BaseModel):
+    mode: Optional[str] = None
+    rag_mode: Optional[str] = None
+
+
+@app.get("/api/settings/rag_mode")
+async def get_rag_mode():
+    """Returns current RAG mode, status, and available options."""
+    mode = getattr(config, "internet_rag_mode", "airgapped")
+    return {
+        "rag_mode": mode,
+        "mode": mode,
+        "status": "active",
+        "available_modes": VALID_RAG_MODES,
+        "allowed_modes": VALID_RAG_MODES,
+        "descriptions": {
+            "airgapped": "Airgapped Local: 100% offline memory. Zero external network requests.",
+            "jev_controlled": "Jev-Gated Web: TypeSafe AI single-token verification gating before external search.",
+            "open_internet": "Open Web: Unrestricted real-time web grounding for global contemporary context."
+        }
+    }
+
+
+@app.post("/api/settings/rag_mode")
+async def set_rag_mode(req: RAGModeRequest):
+    """Updates the active RAG grounding and internet access mode with validation."""
+    target_mode = (req.rag_mode or req.mode or "").strip().lower()
+    if target_mode not in VALID_RAG_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid RAG mode '{req.rag_mode or req.mode}'. Must be one of: {VALID_RAG_MODES}"
+        )
+    config.internet_rag_mode = target_mode
+    retrieval.rag_mode = target_mode
+    if hasattr(retrieval, "internet_engine") and retrieval.internet_engine:
+        retrieval.internet_engine.default_mode = target_mode
+    try:
+        config.save_to_file()
+    except Exception:
+        pass
+    return {
+        "status": "success",
+        "rag_mode": target_mode,
+        "mode": target_mode,
+        "message": f"RAG mode updated to '{target_mode}'"
+    }
+

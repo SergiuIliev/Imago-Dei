@@ -3,9 +3,9 @@
 **Date of Execution:** 2026-10-13  
 **Target Host Platform:** Apple Silicon M4 (arm64, 10-core CPU, 10-core GPU, Metal 4, MPS active)  
 **Operating System:** macOS 27.0 (Darwin Kernel Version 27.0.0 arm64)  
-**Python Runtime:** Python 3.11.17 (`/Users/Sergiu/AI/venv-webui/bin/python`)  
-**Base Directory:** `/Users/Sergiu/AI`  
-**Execution Command:** `/Users/Sergiu/AI/scripts/run_tests.sh`
+**Python Runtime:** Python 3.11.17 (`python3`)  
+**Base Directory:** `~/AI`  
+**Execution Command:** `~/AI/scripts/run_tests.sh`
 
 ---
 

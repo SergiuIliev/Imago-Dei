@@ -49,8 +49,8 @@ apply_icon_to_app "$APP_LOCAL"
 apply_icon_to_app "$APP_SYSTEM"
 apply_icon_to_app "$PROJECT_ROOT/Start Time Capsule.app"
 apply_icon_to_app "$PROJECT_ROOT/Stop Time Capsule.app"
-apply_icon_to_app "/Users/Sergiu/AI/Start Time Capsule.app"
-apply_icon_to_app "/Users/Sergiu/AI/Stop Time Capsule.app"
+[ -d "$PROJECT_ROOT/../Start Time Capsule.app" ] && apply_icon_to_app "$PROJECT_ROOT/../Start Time Capsule.app"
+[ -d "$PROJECT_ROOT/../Stop Time Capsule.app" ] && apply_icon_to_app "$PROJECT_ROOT/../Stop Time Capsule.app"
 
 # Invalidate LaunchServices cache
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"

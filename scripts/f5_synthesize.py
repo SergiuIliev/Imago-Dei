@@ -19,7 +19,13 @@ from pathlib import Path
 # Ensure environment
 if not os.environ.get("PYTHONHASHSEED") or not os.environ.get("PYTHONHASHSEED", "").isdigit():
     os.environ["PYTHONHASHSEED"] = "0"
-os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+# Ensure PATH contains local ffmpeg if available
+try:
+    import imageio_ffmpeg
+    ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+    os.environ["PATH"] = f"{ffmpeg_dir}:{os.environ.get('PATH', '')}"
+except Exception:
+    pass
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:

@@ -12,12 +12,6 @@ mkdir -p "$LOG_DIR"
 
 PYTHON_BIN="$PROJECT_ROOT/venv/bin/python"
 if [ ! -f "$PYTHON_BIN" ]; then
-  PYTHON_BIN="/Users/Sergiu/AI/venv-webui/bin/python"
-fi
-if [ ! -f "$PYTHON_BIN" ]; then
-  PYTHON_BIN="/Users/Sergiu/.local/bin/python3.11"
-fi
-if [ ! -f "$PYTHON_BIN" ]; then
   PYTHON_BIN="$(which python3)"
 fi
 
@@ -44,7 +38,6 @@ if ! curl -s -m 1 http://127.0.0.1:7861/health > /dev/null 2>&1; then
 fi
 
 export PYTHONPATH="$PROJECT_ROOT"
-export VIRTUAL_ENV="/Users/Sergiu/AI/venv-webui"
 $PYTHON_BIN -c "
 import sys
 sys.path.insert(0, '$PROJECT_ROOT')

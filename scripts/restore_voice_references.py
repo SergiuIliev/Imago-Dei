@@ -19,7 +19,7 @@ TARGET_SR = 24000
 TARGET_LUFS = -18.0
 MAX_PEAK = 0.95
 
-BASE_DIR = Path("/Users/Sergiu/AI/Time_Capsule")
+BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data" / "capsule"
 AUDIO_CACHE_DIR = DATA_DIR / "audio_cache"
 VOICE_REF_DIR = DATA_DIR / "voice_references"

@@ -1,0 +1,64 @@
+{
+  "app_version": "v0.1.0",
+  "storage": {
+    "base_dir": ".",
+    "data_dir": "./data/capsule",
+    "sqlite_db_path": "./data/capsule/archive.db",
+    "chroma_dir": "./data/capsule/vector_store",
+    "media_input_dir": "./vlogs",
+    "exports_dir": "./exports",
+    "audio_output_dir": "./data/capsule/audio_cache",
+    "models_dir": "./models"
+  },
+  "llm": {
+    "provider": "ollama",
+    "endpoint": "http://127.0.0.1:11434",
+    "model_name": "llama3.2:3b",
+    "fallback_model": "gemma2:2b",
+    "critic_model": "qwen3:4b",
+    "mlx_endpoint": "http://127.0.0.1:8081",
+    "enable_jev_verification": true,
+    "temperature": 0.35,
+    "context_window": 8192,
+    "timeout_seconds": 45.0
+  },
+  "embedding": {
+    "provider": "chroma_onnx",
+    "model_name": "all-MiniLM-L6-v2",
+    "dimension": 384,
+    "batch_size": 32
+  },
+  "asr": {
+    "provider": "pyav_whisper",
+    "model_size": "base",
+    "compute_type": "float32",
+    "device": "cpu"
+  },
+  "tts": {
+    "provider": "kokoro",
+    "default_voice": "default_voice",
+    "sample_rate": 24000,
+    "allow_reference_cloning": true,
+    "reference_audio_dir": "./data/capsule/voice_references"
+  },
+  "avatar": {
+    "provider": "liveportrait_stub",
+    "target_fps": 25,
+    "resolution": "512x512",
+    "reference_portrait_image": ""
+  },
+  "security": {
+    "local_only": true,
+    "disable_telemetry": true,
+    "bind_host": "127.0.0.1",
+    "bind_port": 7860,
+    "allow_remote_tunnels": false,
+    "internet_rag_mode": "airgapped"
+  },
+  "retrieval": {
+    "internet_rag_mode": "airgapped",
+    "top_k_memories": 5,
+    "top_k_beliefs": 3,
+    "similarity_threshold": 0.65
+  }
+}

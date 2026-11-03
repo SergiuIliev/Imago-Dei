@@ -14,7 +14,7 @@ from core.models import ExpressiveDeliveryParams, EmotionCategory
 
 
 # Dynamic emotion-to-reference clip mapping based on authentic vlog acoustic profiles
-# Evaluated from /Users/Sergiu/AI/Time_Capsule/data/capsule/voice_references/voice_references.json
+# Evaluated from data/capsule/voice_references/voice_references.json
 EMOTION_REFERENCE_MAP: Dict[str, str] = {
     EmotionCategory.REFLECTIVE.value: "ref_02",  # 9.04s, reflective, philosophical cadence (F0: 135.6 Hz)
     EmotionCategory.HUMOROUS.value: "ref_10",    # 4.00s, playful, light British accent remark (F0: 145.5 Hz)
@@ -274,7 +274,8 @@ class VoiceProfile:
 
     def __post_init__(self):
         # Auto-detect empirical voice reference profile if present
-        ref_manifest = Path("/Users/Sergiu/AI/Time_Capsule/data/capsule/voice_references/voice_references.json")
+        project_root = Path(__file__).resolve().parent.parent
+        ref_manifest = project_root / "data" / "capsule" / "voice_references" / "voice_references.json"
         if ref_manifest.exists() and not self.reference_audio_clips:
             try:
                 with open(ref_manifest, "r", encoding="utf-8") as f:

@@ -7,7 +7,7 @@ cd "$PROJECT_ROOT"
 
 PYTHON_BIN="$PROJECT_ROOT/venv/bin/python"
 if [ ! -f "$PYTHON_BIN" ]; then
-  PYTHON_BIN="/Users/Sergiu/AI/venv-webui/bin/python"
+  PYTHON_BIN="$(which python3)"
 fi
 
 TARGET_DIR="$1"

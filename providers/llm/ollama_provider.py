@@ -96,6 +96,18 @@ class OllamaLLMProvider(LLMProvider):
         if self.fallback_model and self.fallback_model != self.model_name:
             models_to_try.append(self.fallback_model)
 
+        # Fallback to any available installed model in Ollama if configured models are missing
+        try:
+            tags_req = urllib.request.Request(f"{self.endpoint}/api/tags", method="GET")
+            with urllib.request.urlopen(tags_req, timeout=2.0) as resp:
+                tags_data = json.loads(resp.read().decode("utf-8"))
+                for m in tags_data.get("models", []):
+                    m_name = m.get("name")
+                    if m_name and m_name not in models_to_try:
+                        models_to_try.append(m_name)
+        except Exception:
+            pass
+
         stop_tokens = [
             "<|eot_id|>",
             "<|start_header_id|>",

@@ -115,6 +115,205 @@ window.stopAllAudio = function() {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Theme Manager: Dark Obsidian / Light Paper Aesthetics
+  function initTheme() {
+    const STORAGE_KEY = "timecapsule_theme";
+    const themeToggleBtn = document.getElementById("themeToggleBtn");
+    const themeIcon = document.getElementById("themeIcon");
+
+    function getPreferredTheme() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === "light" || saved === "dark") {
+        return saved;
+      }
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      if (themeIcon) {
+        themeIcon.innerText = theme === "dark" ? "light_mode" : "dark_mode";
+      }
+      if (themeToggleBtn) {
+        themeToggleBtn.setAttribute(
+          "title",
+          theme === "dark" ? "Switch to Light Paper Theme" : "Switch to Dark Obsidian Theme"
+        );
+      }
+    }
+
+    const initialTheme = getPreferredTheme();
+    applyTheme(initialTheme);
+
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener("click", () => {
+        const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+        const nextTheme = currentTheme === "dark" ? "light" : "dark";
+        localStorage.setItem(STORAGE_KEY, nextTheme);
+        applyTheme(nextTheme);
+      });
+    }
+
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        applyTheme(e.matches ? "dark" : "light");
+      }
+    });
+  }
+
+  // RAG Grounding & Internet Access Mode Manager
+  function initRAGMode() {
+    const toggleBtn = document.getElementById("ragModeToggleBtn");
+    const modeIcon = document.getElementById("ragModeIcon");
+    const modeLabel = document.getElementById("ragModeLabel");
+    const modal = document.getElementById("ragModeModal");
+    const closeBtn = document.getElementById("closeRagModeModalBtn");
+    const cancelBtn = document.getElementById("cancelRagModeBtn");
+    const applyBtn = document.getElementById("applyRagModeBtn");
+    const optionItems = document.querySelectorAll(".rag-option-item");
+    const radioInputs = document.querySelectorAll("input[name='ragModeRadio']");
+
+    let currentMode = "airgapped";
+
+    const modeConfig = {
+      airgapped: {
+        label: "Airgapped Local",
+        icon: "lock",
+        cssClass: "mode-airgapped"
+      },
+      jev_controlled: {
+        label: "Jev-Gated Web",
+        icon: "verified_user",
+        cssClass: "mode-jev_controlled"
+      },
+      open_internet: {
+        label: "Open Web",
+        icon: "public",
+        cssClass: "mode-open_internet"
+      }
+    };
+
+    function updateBadge(mode) {
+      currentMode = modeConfig[mode] ? mode : "airgapped";
+      const cfg = modeConfig[currentMode];
+      if (toggleBtn) {
+        toggleBtn.classList.remove("mode-airgapped", "mode-jev_controlled", "mode-open_internet");
+        toggleBtn.classList.add(cfg.cssClass);
+      }
+      if (modeIcon) modeIcon.innerText = cfg.icon;
+      if (modeLabel) modeLabel.innerText = cfg.label;
+    }
+
+    function selectOptionInModal(mode) {
+      radioInputs.forEach(r => {
+        r.checked = (r.value === mode);
+      });
+      optionItems.forEach(item => {
+        if (item.getAttribute("data-mode") === mode) {
+          item.classList.add("selected");
+        } else {
+          item.classList.remove("selected");
+        }
+      });
+    }
+
+    function openModal() {
+      selectOptionInModal(currentMode);
+      if (modal) modal.style.display = "flex";
+    }
+
+    function closeModal() {
+      if (modal) modal.style.display = "none";
+    }
+
+    async function fetchRAGMode() {
+      try {
+        const res = await fetch("/api/settings/rag_mode");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.mode) {
+            updateBadge(data.mode);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch active RAG mode, defaulting to airgapped:", e);
+        updateBadge("airgapped");
+      }
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", openModal);
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener("click", closeModal);
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", closeModal);
+    }
+
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) {
+          closeModal();
+        }
+      });
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal && modal.style.display !== "none") {
+        closeModal();
+      }
+    });
+
+    optionItems.forEach(item => {
+      item.addEventListener("click", () => {
+        const mode = item.getAttribute("data-mode");
+        selectOptionInModal(mode);
+      });
+    });
+
+    if (applyBtn) {
+      applyBtn.addEventListener("click", async () => {
+        let chosenMode = currentMode;
+        radioInputs.forEach(r => {
+          if (r.checked) chosenMode = r.value;
+        });
+
+        applyBtn.disabled = true;
+        const prevText = applyBtn.innerHTML;
+        applyBtn.innerHTML = `<span class="material-symbols-outlined spin-icon" style="font-size:16px;">progress_activity</span><span>Applying...</span>`;
+
+        try {
+          const res = await fetch("/api/settings/rag_mode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: chosenMode })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            updateBadge(data.mode || chosenMode);
+            closeModal();
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`Failed to update RAG mode: ${errData.detail || "Server error"}`);
+          }
+        } catch (err) {
+          console.error("Error setting RAG mode:", err);
+          alert(`Network error updating RAG mode: ${err.message}`);
+        } finally {
+          applyBtn.disabled = false;
+          applyBtn.innerHTML = prevText;
+        }
+      });
+    }
+
+    fetchRAGMode();
+  }
+
+  // Initialize Theme and RAG Mode
+  initTheme();
+  initRAGMode();
+
   // Navigation & Page Title Sync
   const navItems = document.querySelectorAll(".m3-nav-item, .nav-item");
   const tabPanes = document.querySelectorAll(".tab-pane");
@@ -148,7 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     "about": {
       title: "About & Architectural Evolution",
-      subhead: "Chronicle of behind-the-scenes LLM fine-tuning, memory transformations, and acoustic engineering across versions"
+      subhead: "Chronicle of behind-the-scenes LLM fine-tuning, memory transformations, and acoustic engineering across versions (v0.1.0)"
     }
   };
 

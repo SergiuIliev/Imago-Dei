@@ -6,14 +6,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 export PYTHONPATH="$PROJECT_ROOT"
-export VIRTUAL_ENV="/Users/Sergiu/AI/venv-webui"
 PYTHON_BIN="$PROJECT_ROOT/venv/bin/python"
-if [ ! -f "$PYTHON_BIN" ]; then
-  PYTHON_BIN="/Users/Sergiu/AI/venv-webui/bin/python"
-fi
-if [ ! -f "$PYTHON_BIN" ]; then
-  PYTHON_BIN="/Users/Sergiu/.local/bin/python3.11"
-fi
 if [ ! -f "$PYTHON_BIN" ]; then
   PYTHON_BIN="$(which python3)"
 fi

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Persistent F5-TTS Metal MPS Speech Synthesis Daemon.
-Runs in /Users/Sergiu/AI/venv-voice/bin/python on Apple Silicon Metal MPS (device="mps").
-Pre-loads Sergiu's fine-tuned acoustic weights and Vocos 24kHz vocoder into Metal GPU memory
+Runs in local Python environment on Apple Silicon Metal MPS (device="mps").
+Pre-loads calibrated acoustic weights and Vocos 24kHz vocoder into Metal GPU memory
 once at startup, eliminating cold-start latency and delivering warm sentence synthesis in < 5s.
 Exposes high-speed local HTTP endpoints on 127.0.0.1:7861.
 """
@@ -23,9 +23,9 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 try:
     import imageio_ffmpeg
     ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
-    os.environ["PATH"] = f"{ffmpeg_dir}:/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+    os.environ["PATH"] = f"{ffmpeg_dir}:{os.environ.get('PATH', '')}"
 except Exception:
-    os.environ["PATH"] = f"/Users/Sergiu/AI/venv-voice/bin:{os.environ.get('PATH', '')}"
+    pass
 
 import random
 # Protect against upstream F5-TTS 64-bit seed overflow bug on macOS ARM64
