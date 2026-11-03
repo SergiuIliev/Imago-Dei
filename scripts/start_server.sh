@@ -60,9 +60,23 @@ if stats['total_memories'] == 0:
 " 2>/dev/null || true
 
 echo "Starting Personal AI Time Capsule server..."
-nohup "$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port 7860 < /dev/null > "$LOG_FILE" 2>&1 &
-SERVER_PID=$!
-echo "$SERVER_PID" > "$PID_FILE"
+SERVER_PID=$("$PYTHON_BIN" -c '
+import subprocess, sys
+logfile, pidfile = sys.argv[1], sys.argv[2]
+cmd = sys.argv[3:]
+with open(logfile, "ab", buffering=0) as out:
+    p = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        close_fds=True,
+    )
+with open(pidfile, "w") as pf:
+    pf.write(str(p.pid) + "\n")
+print(p.pid)
+' "$LOG_FILE" "$PID_FILE" "$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port 7860)
 
 # Wait for server to become responsive
 for i in {1..20}; do

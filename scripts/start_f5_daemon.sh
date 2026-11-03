@@ -23,9 +23,23 @@ export PYTORCH_ENABLE_MPS_FALLBACK="1"
 export PYTHONPATH="$PROJECT_ROOT"
 
 echo "Starting F5-TTS Metal MPS Voice Daemon..."
-nohup "$PYTHON_BIN" "$PROJECT_ROOT/scripts/f5_daemon.py" --host 127.0.0.1 --port 7861 < /dev/null > "$LOG_FILE" 2>&1 &
-DAEMON_PID=$!
-echo "$DAEMON_PID" > "$PID_FILE"
+DAEMON_PID=$("$PYTHON_BIN" -c '
+import subprocess, sys
+logfile, pidfile = sys.argv[1], sys.argv[2]
+cmd = sys.argv[3:]
+with open(logfile, "ab", buffering=0) as out:
+    p = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        close_fds=True,
+    )
+with open(pidfile, "w") as pf:
+    pf.write(str(p.pid) + "\n")
+print(p.pid)
+' "$LOG_FILE" "$PID_FILE" "$PYTHON_BIN" "$PROJECT_ROOT/scripts/f5_daemon.py" --host 127.0.0.1 --port 7861)
 
 # Wait for daemon to become ready (model loads into MPS in ~10-20s)
 for i in {1..40}; do
