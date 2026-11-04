@@ -2,7 +2,7 @@
 
 > *"In Homo Deus, 'gods' are merely super-powered biological or digital entities who possess immense strength, intelligence, and lifespan, but not necessarily superior morality, love, or holiness.*
 > 
-> *This tool ultimately aims to empower people to create an image of their own cognition and leverage it to assist them in better understanding themselves."*
+> *This tool ultimately aims to empower people to create an image of their own cognition and leverage it in better understanding and empowering themselves."*
 
 [![Release](https://img.shields.io/badge/version-v0.1.0-blue.svg)](https://github.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -12,17 +12,18 @@
 
 ---
 
-## 1. The Manifesto: Cognitive Mirror Sovereignty
+## 1. The Manifesto: Cognitive Mirror Autonomy
 
-In an era dominated by centralized hyperscaler cloud models that monetize human correspondence and flatten distinct human consciousness into generic corporate prose, **Time Capsule** offers a sovereign, private alternative. 
+In an era dominated by centralized hyperscaler cloud models that monetize human correspondence and flatten distinct human consciousness into generic corporate prose, **Time Capsule** offers an open-source, community-driven alternative. 
 
-Human identity is neither static nor monolithic. It compounds across decades—shaped by youthful idealism, builder grit, crucible failures, and mature synthesis. Rather than surrendering your personal journals, audio, thoughts, and memories to external servers, Time Capsule enables you to build an autonomous, mathematically grounded **Imago Dei** (an image of your own cognition) operating entirely on your personal machine.
+Human identity is neither static nor monolithic. It compounds across decades. Rather than surrendering your personal journals, audio, thoughts, and memories to external servers, Time Capsule enables you to build an autonomous, mathematically grounded **Imago Dei** (an image of your own cognition) operating entirely on your personal machine.
 
 ### Core Philosophical Invariants
-1. **Local Sovereignty Over Cloud Delegation**: Your memories, voice prints, likeness, and reasoning models run 100% locally on your own hardware (`127.0.0.1`). Zero outbound telemetry, zero third-party data broker transmission.
+1. **Local Ownership Over Cloud Delegation**: Your memories, voice prints, likeness, and reasoning models run 100% locally on your own hardware (`101.0.0.1`). Zero outbound telemetry, zero third-party data broker transmission.
 2. **Honest Epistemic Uncertainty**: When the archive lacks direct evidence for a query, the model refuses to hallucinate synthetic biographical facts. It states its epistemic bounds transparently.
-3. **Chronological Dialectics**: Historical eras (Formative Years, Builder Phase, Present Day, Panoramic View) remain distinct. Past perspectives are preserved in their authentic context without being retroactively rewritten by present hindsight.
+3. **Chronological Dialectics**: Historical eras (Childhood, Adolescence, 20s, 30s, etc.) remain distinct. Past perspectives are preserved in their authentic context without being retroactively rewritten by present hindsight.
 4. **Simplicity is Complexity Resolved**: Complex multi-modal models (Whisper ASR, F5-TTS flow matching, LivePortrait video avatars, Hybrid FTS5 + ChromaDB RAG, and TypeSafe AI Jev verification) are unified under clean, deterministic, scriptable interfaces.
+5. **Antifragility and Community Hardening**: The architecture benefits from transparent peer audit and community security development. Running Time Capsule inside private virtual machine implementations or local containerized sandboxes can increase security and privacy even further.
 
 ---
 
@@ -39,7 +40,11 @@ python scripts/double_audit.py --strict
 ```
 
 ### 🌐 Tri-Mode Internet RAG Engine
-Dynamic RAG mode switching directly from the UI header or REST API:
+
+> **What is RAG (Retrieval-Augmented Generation)?**  
+> For the uninitiated, foundation language models generate answers based only on broad public data they were trained on, which often causes them to make up plausible-sounding but false information (called "hallucinations"). Retrieval-Augmented Generation solves this: before answering your prompt, the system searches your verified personal databases or trusted web sources for exact matching paragraphs, and injects those real facts directly into the prompt. The AI then writes its response based strictly on your real history rather than guesswork.
+
+Time Capsule provides dynamic RAG mode switching directly from the UI header or REST API:
 - 🔒 **Airgapped Local (Default)**: Strictly offline. Zero external network requests. Answers are grounded purely in local SQLite FTS5 and ChromaDB vector embeddings.
 - 🛡️ **Jev-Controlled Internet**: Uses TypeSafe AI / Jev single-token verification gating:
   1. Jev evaluates proposition `requires_external_factual_grounding`. If false (e.g. personal inquiry), web access is blocked.
@@ -49,7 +54,7 @@ Dynamic RAG mode switching directly from the UI header or REST API:
 - 🌐 **Open Web**: Directly augments memory retrieval with real-time web search for queries requiring global contemporary context.
 
 ### 🧠 Latest Open-Weights Model Ingestion Pipeline
-An automated ingestion and benchmarking pipeline (`ingestion/model_pipeline.py`, `scripts/ingest_models.py`) supporting the latest open-weights model families:
+An automated ingestion and benchmarking pipeline (`ingestion/model_pipeline.py`, `scripts/ingest_models.py`) supporting modern open-weights model families:
 - **Supported Model Families**:
   - **LLaMA 3.3 (70B) & LLaMA 3.2 (1B, 3B)**
   - **Qwen 2.5 (0.5B to 72B) & Qwen 2.5-Coder**
@@ -71,18 +76,20 @@ python scripts/ingest_models.py list
 python scripts/ingest_models.py pull llama3.2:3b --backend ollama
 ```
 
-### 🎙️ Studio-Grade Neural Voice & Live Push-to-Talk
+### 🎙️ Neural Voice & Live Push-to-Talk
+> **Experimental Research Notice**: This neural voice pipeline is in early-stage experimental research. It is mainly intended to be developed in the future as a means of synthesizing era-specific speech, reflecting how our acoustic voice, cadence, and verbal expressions evolve across the years (e.g., how you spoke in your 20s versus your 30s).
+
 - **Live Microphone Push-to-Talk ASR**: Powered by Whisper with two-stage voice activity detection (VAD), standardizing incoming browser audio to 16kHz mono Linear PCM WAV via FFmpeg.
-- **Persistent F5-TTS Metal MPS Daemon**: Fast, expressive flow-matching neural voice synthesis running on Apple Silicon GPU (`:7861`), delivering 24kHz broadcast-quality speech.
+- **Persistent F5-TTS Metal MPS Daemon**: Flow-matching neural voice synthesis running on Apple Silicon GPU (`:7861`), delivering 24kHz speech.
 - **Parametric DSP De-Humming**: Real-time notch filtering (50 Hz / 60 Hz hum elimination) and dynamic reference clip isolation.
 
 ### 👤 Photorealistic Era-Aware Avatar Reenactment
+> **Experimental Notice**: Optical-flow talking-head reenactment is early-stage, experimental, and not currently functional in this release. The pipeline serves as an architectural design framework for future local vision models.
+
 - **Optical-Flow Talking-Head Synthesis**: Modular LivePortrait pipeline with asynchronous job management, spontaneous eye-blink synthesis (~3.2s cycle), natural dental highlights, and 3D head kinematics muxed at 25 FPS sample-locked H.264/AAC.
 
 ### 🌓 Minimalist Dual-Theme UI
-- **Obsidian Dark Mode**: Low-fatigue slate/obsidian palette with emerald accents and crisp typography.
-- **Editorial Paper White / Light Mode**: High-contrast, clean minimalist paper aesthetic with warm charcoal typography and crisp borders.
-- Instant toggle button with automatic `prefers-color-scheme` synchronization and persistent local storage.
+- **Light / Dark Mode**: Clean, high-contrast visual themes with instant switching, automatic system preference detection, and persistent local storage.
 
 ---
 
@@ -92,7 +99,7 @@ To ensure private personal vlogs, local calibrations, and personal memory dumps 
 
 ```
                   ┌───────────────────────────────┐
-                  │      dev (Local Sovereign)    │
+                  │      dev (Local Workspace)   │
                   │  - Personal media & vlogs     │
                   │  - Local hardware configs     │
                   │  - Active development & tests │
@@ -111,18 +118,22 @@ To ensure private personal vlogs, local calibrations, and personal memory dumps 
                   └───────────────────────────────┘
 ```
 
-- **`dev` Branch**: Where you ingest your personal vlogs, train your custom voice clones, and experiment. Local only.
+- **`dev` Branch**: Where you ingest your personal vlogs, train your custom voice models, and experiment. Kept local only.
 - **`prod` Branch**: The public, open-source branch. Completely sanitized of user paths, private credentials, and personal recordings. Verified by `scripts/double_audit.py` before every merge.
+- **Cardinal Rules**:
+  1. **Fine-Tuned Weights Remain Local**: Fine-tuned model weights and LoRA adapters must always remain local-only.
+  2. **Zero Training Data Leakage**: Personal training data, raw vlogs, audio journals, transcripts, or any variants of them must **NEVER be committed or pushed to remote repositories**. This is strictly enforced by `.gitignore` and `scripts/double_audit.py`.
+  3. **Extensible Security**: More security layers, container boundaries, and private virtual machine isolation layers can be added in the future as new pipelines are introduced.
 
 ---
 
 ## 4. Quickstart Guide
 
 ### 4.1 Prerequisites
-- **macOS** (Apple Silicon M-series recommended for Metal MPS acceleration) or **Linux** (NVIDIA CUDA or CPU).
+- **macOS** (Apple Silicon M-series recommended for Metal MPS acceleration), **Linux** (NVIDIA CUDA or CPU), or **Windows via WSL2** (Windows Subsystem for Linux with Ubuntu).
 - Python 3.11+.
 - Ollama or Apple MLX for local LLM inference.
-- FFmpeg installed (`brew install ffmpeg` on macOS, `apt install ffmpeg` on Ubuntu).
+- FFmpeg installed (`brew install ffmpeg` on macOS, `apt install ffmpeg` on Ubuntu/WSL2).
 
 ### 4.2 Installation
 ```bash
@@ -170,7 +181,110 @@ python scripts/double_audit.py --strict
 
 ---
 
-## 5. Directory Layout
+## 5. Ingestion & Fine-Tuning Corpus Guide
+
+Time Capsule accepts three fundamental modalities for autobiographical ingestion, semantic memory indexing, and local model fine-tuning:
+
+### 5.1 Video Ingestion (`.mp4`, `.mov`, `.mkv`, `.webm`)
+- **Accepted Media**: Personal vlogs, recorded talks, home videos, video journals, conference presentations.
+- **Processing Pipeline**:
+  - FFmpeg extracts 16kHz mono Linear PCM audio streams for automatic speech transcription.
+  - Video keyframe extraction identifies representative face portraits for era visual grounding.
+  - Generates temporal metadata (capture dates, duration, scene transitions).
+- **Directory**: Place files in `./vlogs/` (or directory set by `TIMECAPSULE_VLOGS_DIR`).
+
+### 5.2 Audio Ingestion (`.wav`, `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`)
+- **Accepted Media**: Voice memos, podcast appearances, dictations, voice messages, lectures.
+- **Processing Pipeline**:
+  - Transcribed locally using Whisper with word-level and sentence-level timestamps.
+  - High-SNR audio segments are extracted as prospective acoustic reference clips for speech modeling.
+  - Parametric notch filtering eliminates 50 Hz / 60 Hz electrical background hums.
+- **Directory**: Place files in `./data/capsule/audio_input/` or point ingestion scripts to the source audio path.
+
+### 5.3 Text Ingestion (`.txt`, `.md`, `.json`, `.pdf`, `.csv`)
+- **Accepted Media**: Personal journals, Markdown notes, chat exports (e.g. WhatsApp, Signal, Telegram), essays, blog drafts, correspondence, book reflections.
+- **Processing Pipeline**:
+  - Semantic sliding-window chunking (preserving paragraph boundaries and thought coherence).
+  - Chronological metadata tagging (era identification: Childhood, Adolescence, 20s, 30s, etc.).
+  - Dialectical categorization (extracting core beliefs, values, evolution of perspective over time).
+- **Directory**: Place documents in `./data/capsule/text_input/` or ingest directly via the ingestion utilities.
+
+### 5.4 Fine-Tuning Dataset Generation
+The ingested multi-modal data is compiled into autobiographical instruction pairs:
+```bash
+# Build instruction fine-tuning dataset from ingested memories and temporal beliefs
+python scripts/build_autobiographical_dataset.py --output data/capsule/training_dataset.jsonl
+
+# Inspect generated fine-tuning pairs
+head -n 5 data/capsule/training_dataset.jsonl
+```
+
+> **Cardinal Rule Reminder**: Training datasets and fine-tuned weights stay local on your machine. Never commit them to git.
+
+---
+
+## 6. Autonomous Agent Instructions (For AI Agents Implementing or Installing Time Capsule)
+
+If you are an autonomous coding agent (Antigravity, Claude Code, Cursor, Aider, or a CI/CD agent) tasked with installing, configuring, or extending Time Capsule, follow these deterministic procedures:
+
+### Step 1: Pre-Flight Environment Inspection
+```bash
+# Verify Python version (must be >= 3.11)
+python3 --version
+
+# Check FFmpeg availability (required for audio/video conversion)
+ffmpeg -version || which ffmpeg
+
+# Inspect hardware headroom and unified memory
+python3 scripts/ingest_models.py profile
+```
+
+### Step 2: Automated Installation & Virtual Environment
+```bash
+# Create isolated virtual environment if not present
+test -d venv || python3 -m venv venv
+source venv/bin/activate
+
+# Install required dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Step 3: Local Model Orchestration
+```bash
+# Verify Ollama or MLX service availability
+curl -s http://127.0.0.1:11434/api/tags || echo "Ollama not running"
+
+# Pull baseline foundation model if missing
+python scripts/ingest_models.py pull llama3.2:3b --backend ollama --set-default
+```
+
+### Step 4: Portable Configuration Invariants
+- **Dynamic Paths**: Never hardcode machine-specific paths (such as absolute user home directories). Always derive paths relative to `PROJECT_ROOT` or use `TIMECAPSULE_*` environment variables.
+- **Airgapped Default**: Keep `internet_rag_mode = "airgapped"` unless explicitly testing web search.
+- **Loopback Binding**: Ensure server binds to `127.0.0.1` or `101.0.0.1`. Never expose public unauthenticated endpoints.
+
+### Step 5: Double Audit Verification Gate
+Before staging or committing any code changes:
+```bash
+# Run strict double privacy audit
+python scripts/double_audit.py --strict --check-git
+
+# If audit fails on hardcoded paths, run automatic fixer
+python scripts/double_audit.py --fix
+```
+**Exit Code Invariant**: The double audit must exit with code `0`. Any blocking issue (secrets, PII, user home paths) must be resolved before proceeding.
+
+### Step 6: Complete Test Suite Barrier
+```bash
+# Execute full unit and integration regression suite
+./scripts/run_tests.sh
+```
+Ensure all tests pass before declaring any implementation complete.
+
+---
+
+## 7. Directory Layout
 
 ```
 Time_Capsule/
@@ -210,7 +324,7 @@ Time_Capsule/
 
 ---
 
-## 6. Security, Privacy & Contributing
+## 8. Security, Privacy & Contributing
 
 - **Zero-Telemetry Guarantee**: This repository contains zero third-party telemetry, tracking pixels, or phone-home requests.
 - **Reporting Vulnerabilities**: To report any potential information disclosure or security issue, please open a private GitHub advisory.
@@ -218,6 +332,18 @@ Time_Capsule/
 
 ---
 
-## 7. License
+## 9. Disclaimers & Technical Limitations
 
-Released under the **MIT License**. Build freely, stay sovereign.
+1. **Experimental Research Software**: Time Capsule is an experimental open-source project (version `v0.1.0`) created for personal memory preservation, self-understanding, and cognition exploration.
+2. **Epistemic Limits of Foundation Models**: Generative language models, even when grounded with RAG, can misinterpret historical nuance or generate inaccurate inferences. Always consult original journal and media records for critical facts.
+3. **Avatar Synthesis Notice**: Optical-flow avatar reenactment is in early-stage research and is not functional in this release.
+4. **Voice Synthesis Research State**: Era-specific acoustic modeling is experimental. Synthesizing authentic speech across different life eras depends on having clean, high-signal-to-noise ratio historical audio.
+5. **Hardware Constraints**: Running local 70B+ parameter models requires high-end hardware (e.g. 64GB+ unified memory or multiple high-VRAM GPUs). On machines with 16GB to 24GB RAM, use quantized 3B to 14B models to avoid memory paging.
+6. **Self-Custody & Backup Responsibility**: Time Capsule is strictly self-hosted. There are no cloud recovery mechanisms, password resets, or remote backups. You are solely responsible for securing your machine, enabling full-disk encryption, and maintaining offline backups.
+7. **Not a Clinical, Psychiatric, or Legal Tool**: Time Capsule is a personal cognitive mirror and retrospective digital archive. It does not provide medical, psychological, psychiatric, or legal advice.
+
+---
+
+## 10. License
+
+Released under the **MIT License**. Build freely, build locally.
