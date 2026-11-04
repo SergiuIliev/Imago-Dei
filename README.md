@@ -4,7 +4,7 @@
 > 
 > *This tool ultimately aims to empower people to create an image of their own cognition and leverage it in better understanding and empowering themselves."*
 
-[![Release](https://img.shields.io/badge/version-v0.1.0-blue.svg)](https://github.com/SergiuIliev/time-capsule)
+[![Release](https://img.shields.io/badge/version-v0.1.0-blue.svg)](https://github.com/SergiuIliev/Imago-Dei)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Local-First](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)](docs/PRIVACY.md)
 [![Double Audit](https://img.shields.io/badge/Security-Double%20Audit%20Verified-brightgreen.svg)](scripts/double_audit.py)
@@ -138,8 +138,8 @@ To ensure private personal vlogs, local calibrations, and personal memory dumps 
 ### 4.2 Installation
 ```bash
 # Clone the repository
-git clone https://github.com/SergiuIliev/time-capsule.git
-cd time-capsule
+git clone https://github.com/SergiuIliev/Imago-Dei.git
+cd Imago-Dei
 
 # Create and activate virtual environment
 python3 -m venv venv
